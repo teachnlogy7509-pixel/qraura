@@ -1,5 +1,5 @@
 // QRaura service worker: app-shell cache, network-first so updates arrive quickly.
-const VERSION = "qraura-v1";
+const VERSION = "qraura-v2";
 const SHELL = ["/", "/index.html", "/style.css", "/app.js", "/qr-lib.js", "/config.js", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
