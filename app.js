@@ -137,6 +137,74 @@
   });
   if ("serviceWorker" in navigator) window.addEventListener("load", function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); });
 
+  /* ---------- QR scanner (camera + upload image) ---------- */
+  function loadScript(src) { return new Promise(function (res, rej) { var t = document.createElement("script"); t.src = src; t.onload = res; t.onerror = rej; document.head.appendChild(t); }); }
+  var jsqrP = null;
+  function getJsQR() {
+    if (window.jsQR) return Promise.resolve(window.jsQR);
+    if (!jsqrP) jsqrP = loadScript("https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js").catch(function () { return loadScript("https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"); }).then(function () { return window.jsQR; }).catch(function () { jsqrP = null; return null; });
+    return jsqrP;
+  }
+  var bd = null;
+  async function decodeCanvas(cv) {
+    if ("BarcodeDetector" in window) {
+      try { bd = bd || new window.BarcodeDetector({ formats: ["qr_code"] }); var r = await Promise.race([bd.detect(cv), new Promise(function (res) { setTimeout(function () { res(null); }, 1500); })]); if (r && r.length && r[0].rawValue) return r[0].rawValue; } catch (e) {}
+    }
+    var J = await getJsQR();
+    if (J) { var g = cv.getContext("2d"), id = g.getImageData(0, 0, cv.width, cv.height); var c = J(id.data, id.width, id.height, { inversionAttempts: "attemptBoth" }); if (c && c.data) return c.data; }
+    return null;
+  }
+  function openScanner() {
+    if (document.querySelector(".scan-ov")) return;
+    var ov = document.createElement("div"); ov.className = "scan-ov";
+    ov.innerHTML = '<div class="scan-box card"><div class="row" style="justify-content:space-between;margin-bottom:8px"><b>📷 QR Scan karo</b><button class="btn sm ghost" id="sx">✕ Band</button></div>' +
+      '<video id="sv" playsinline muted autoplay></video><div class="small" id="sst" style="margin:8px 0">Camera chalu ho raha hai…</div>' +
+      '<div class="row"><label class="btn sm" for="sfile" style="cursor:pointer">🖼️ Gallery se QR upload karo</label><input id="sfile" type="file" accept="image/*" hidden></div><div id="sres"></div></div>';
+    document.body.appendChild(ov);
+    var stream = null, alive = true, vid = $("#sv", ov), st = $("#sst", ov), cv = document.createElement("canvas");
+    function stop() { alive = false; if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+    function close() { stop(); ov.remove(); }
+    function done(text) {
+      stop(); vid.style.display = "none"; st.textContent = "✅ QR mil gaya";
+      try { var u = new URL(text); if (u.origin === location.origin && /^\/s\/[A-Za-z0-9]+\/?$/.test(u.pathname)) { ov.remove(); location.href = u.pathname; return; } } catch (e) {}
+      var link = /^https?:\/\//i.test(text) ? safeUrl(text) : "";
+      $("#sres", ov).innerHTML = '<div class="vb" style="margin-top:10px"><div class="lb">QR mein ye likha hai</div><div class="tx">' + esc(text) + '</div></div><div class="row">' +
+        (link ? '<a class="btn sm" target="_blank" rel="noopener noreferrer" href="' + esc(link) + '">Open karo</a>' : "") + '<button class="btn sm ghost" data-copy="' + esc(text) + '">Copy</button><button class="btn sm ghost" id="sagain">Dobara scan</button></div>' +
+        (link ? '<div class="small" style="margin-top:6px">⚠️ Link kholne se pehle dekh lo ki aap use jaante ho.</div>' : "");
+      $("#sagain", ov).onclick = function () { ov.remove(); openScanner(); };
+    }
+    $("#sx", ov).onclick = close;
+    $("#sfile", ov).onchange = async function (e) {
+      var f = e.target.files[0]; if (!f) return; st.textContent = "Image padh raha hoon…";
+      try {
+        var bmp = await createImageBitmap(f), max = 1400, sc = Math.min(1, max / Math.max(bmp.width, bmp.height));
+        cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc); cv.getContext("2d", { willReadFrequently: true }).drawImage(bmp, 0, 0, cv.width, cv.height);
+        var t = await decodeCanvas(cv);
+        if (t) done(t); else st.textContent = "Is image mein QR nahi mila. Saaf aur poora QR wali photo chuno.";
+      } catch (x) { st.textContent = "Image khul nahi paayi."; }
+      e.target.value = "";
+    };
+    (async function () {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { st.textContent = "Camera is browser mein nahi chal raha. Gallery se QR upload karo."; return; }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        if (!alive) { stop(); return; }
+        vid.srcObject = stream; await vid.play(); st.textContent = "QR ko camera ke saamne laao…";
+        if (!("BarcodeDetector" in window)) getJsQR();
+      } catch (x) { st.textContent = "Camera ki permission nahi mili. Gallery se QR upload kar sakte ho."; return; }
+      var ctx = cv.getContext("2d", { willReadFrequently: true }), busy = false;
+      var timer = setInterval(async function () {
+        if (!alive) return clearInterval(timer);
+        if (busy || !vid.videoWidth) return; busy = true;
+        try {
+          var sc = Math.min(1, 720 / Math.max(vid.videoWidth, vid.videoHeight));
+          cv.width = Math.round(vid.videoWidth * sc); cv.height = Math.round(vid.videoHeight * sc); ctx.drawImage(vid, 0, 0, cv.width, cv.height);
+          var t = await decodeCanvas(cv); if (t && alive) { clearInterval(timer); done(t); }
+        } catch (e) {} busy = false;
+      }, 200);
+    })();
+  }
+
   /* ---------- views ---------- */
   function setupScreen() {
     $app.innerHTML = '<div class="wrap"><div class="card"><h2>⚙️ Setup baaki hai</h2><p>Supabase ki keys <code>config.js</code> mein daalo (SUPABASE_URL aur SUPABASE_ANON_KEY), phir page reload karo.</p></div></div>';
@@ -144,9 +212,10 @@
 
   function nav() {
     return '<div class="nav"><div class="logo" data-go="#/">' + esc(CFG.APP_NAME || "QRaura") + '</div><div class="row">' +
-      (canInstall() ? '<button class="btn sm" id="install">📲 App install</button>' : "") + (session ? '<span class="small">' + esc(userLabel()) + '</span><button class="btn ghost sm" id="pname" title="Naam badlo">✏️</button><button class="btn ghost sm" id="ppass" title="Password badlo">🔑</button><button class="btn ghost sm" id="logout">Logout</button>' : "") + "</div></div>";
+      '<button class="btn sm ghost" id="scanbtn">📷 Scan</button>' + (canInstall() ? '<button class="btn sm" id="install">📲 App install</button>' : "") + (session ? '<span class="small">' + esc(userLabel()) + '</span><button class="btn ghost sm" id="pname" title="Naam badlo">✏️</button><button class="btn ghost sm" id="ppass" title="Password badlo">🔑</button><button class="btn ghost sm" id="logout">Logout</button>' : "") + "</div></div>";
   }
   function bindNav() {
+    var sc = $("#scanbtn"); if (sc) sc.onclick = openScanner;
     var ib = $("#install"); if (ib) ib.onclick = doInstall;
     var pn = $("#pname"); if (pn) pn.onclick = function () { editProfile("name"); };
     var pp = $("#ppass"); if (pp) pp.onclick = function () { editProfile("pass"); };
@@ -168,7 +237,9 @@
       '<div class="err" id="se"></div><button class="btn" style="width:100%" id="ssub">Account banao</button></form>' +
       '<form id="lf2" style="display:none"><label class="field"><span>Username</span><input id="lu" required autocapitalize="off" autocomplete="username" placeholder="e.g. neetu4821"></label>' +
       '<label class="field"><span>Password</span><input type="password" id="lp2" required autocomplete="current-password"></label>' +
-      '<div class="err" id="le"></div><button class="btn" style="width:100%" id="lsub">Login</button></form></div></div>';
+      '<div class="err" id="le"></div><button class="btn" style="width:100%" id="lsub">Login</button></form></div>' +
+      '<div class="auth" style="margin-top:12px"><button class="btn ghost" style="width:100%" id="scan2">📷 QR scan karo / 🖼️ QR image upload karo</button></div></div>';
+    $("#scan2").onclick = openScanner;
     function tab(isNew) {
       $("#sf").style.display = isNew ? "" : "none"; $("#lf2").style.display = isNew ? "none" : "";
       $("#tnew").className = "btn grow" + (isNew ? "" : " ghost"); $("#told").className = "btn grow" + (isNew ? " ghost" : "");
@@ -213,7 +284,7 @@
   var COLS = "id,owner,slug,title,description,blocks,style,has_password,is_active,scan_count,last_scanned_at,created_at,updated_at";
   var cache = [];
   async function dashboard() {
-    $app.innerHTML = '<div class="wrap">' + nav() + '<div class="row" style="justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Mere QR codes</h2><button class="btn" id="new">＋ Naya QR</button></div><div id="list" class="small">Loading…</div></div>';
+    $app.innerHTML = '<div class="wrap">' + nav() + '<div class="row" style="justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Mere QR codes</h2><div class="row"><button class="btn ghost" id="scan3">📷 Scan / Upload QR</button><button class="btn" id="new">＋ Naya QR</button></div></div><div id="list" class="small">Loading…</div></div>';
     var nu = sessionStorage.getItem("qr_new_username");
     if (nu) {
       var bn = document.createElement("div"); bn.className = "card"; bn.style.cssText = "margin-bottom:14px;border-color:#27d980";
@@ -222,7 +293,7 @@
       $("#cpu").onclick = function () { navigator.clipboard && navigator.clipboard.writeText(nu); toast("Copy ho gaya"); };
       $("#cls").onclick = function () { sessionStorage.removeItem("qr_new_username"); bn.remove(); };
     }
-    bindNav(); $("#new").onclick = function () { location.hash = "#/new"; };
+    bindNav(); $("#scan3").onclick = openScanner; $("#new").onclick = function () { location.hash = "#/new"; };
     var r = await sb.from("qr_codes").select(COLS).order("created_at", { ascending: false });
     if (r.error) { $("#list").textContent = "Error: " + r.error.message; return; }
     cache = r.data;

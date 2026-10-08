@@ -60,3 +60,6 @@ input[type=checkbox]{width:auto}
 .small{font-size:13px;color:var(--mut)}
 .upline{height:8px;background:var(--card);border-radius:99px;overflow:hidden;border:1px solid var(--line);margin-bottom:4px}
 .upfill{height:100%;width:0;background:linear-gradient(90deg,var(--a),var(--b));transition:width .15s}
+.scan-ov{position:fixed;inset:0;background:#000b;display:flex;align-items:center;justify-content:center;padding:14px;z-index:20}
+.scan-box{width:100%;max-width:440px;max-height:96vh;overflow:auto}
+.scan-box video{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:14px;background:#000;border:2px solid var(--a)}
