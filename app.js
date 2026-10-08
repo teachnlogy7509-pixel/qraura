@@ -319,7 +319,7 @@
   }
 
   /* ---------- home ---------- */
-  var COLS = "id,owner,slug,title,description,blocks,style,has_password,is_active,scan_count,last_scanned_at,created_at,updated_at";
+  var COLS = "id,owner,slug,title,description,blocks,style,has_password,is_active,public_index,scan_count,last_scanned_at,created_at,updated_at";
   var cache = [];
   async function home() {
     var nu = sessionStorage.getItem("qr_new_username");
@@ -339,7 +339,7 @@
     $("#cnt").textContent = cache.length ? cache.length + " total" : "";
     if (!cache.length) { $("#list").innerHTML = '<div class="empty"><div class="em">' + ic("qr") + '</div><b style="color:var(--txt);font-size:17px">Abhi koi QR nahi hai</b><p style="margin:6px 0 16px">Pehla QR banao aur scan karke dekho.</p><button class="btn" id="e1">' + ic("plus") + " Pehla QR banao</button></div>"; $("#e1").onclick = function () { location.hash = "#/new"; }; return; }
     $("#list").innerHTML = cache.map(function (q) {
-      return '<button class="qi" data-id="' + q.id + '"><canvas></canvas><span class="m"><b>' + esc(q.title) + '</b><span class="meta"><span>' + ic("eye", 14) + " " + q.scan_count + "</span><span>" + ic("file", 14) + " " + q.blocks.length + "</span>" + (q.has_password ? "<span>" + ic("lock", 14) + " Locked</span>" : "") + '<span><i class="dot' + (q.is_active ? "" : " off") + '"></i> ' + (q.is_active ? "Active" : "Off") + '</span></span></span><span class="go">' + ic("chev") + "</span></button>";
+      return '<button class="qi" data-id="' + q.id + '"><canvas></canvas><span class="m"><b>' + esc(q.title) + '</b><span class="meta"><span>' + ic("eye", 14) + " " + q.scan_count + "</span><span>" + ic("file", 14) + " " + q.blocks.length + "</span>" + (q.has_password ? "<span>" + ic("lock", 14) + " Locked</span>" : "") + (q.public_index ? "<span>" + ic("link", 14) + " Google</span>" : "") + '<span><i class="dot' + (q.is_active ? "" : " off") + '"></i> ' + (q.is_active ? "Active" : "Off") + '</span></span></span><span class="go">' + ic("chev") + "</span></button>";
     }).join("");
     $$(".qi").forEach(function (el) {
       var q = cache.filter(function (x) { return x.id === el.getAttribute("data-id"); })[0];
@@ -427,12 +427,12 @@
     return file;
   }
   async function editor(id) {
-    ST = { id: null, slug: null, title: "", description: "", blocks: [], style: { fg: "#111111", bg: "#ffffff", shape: "square" }, password: "", lockOn: false, hasPw: false, active: true };
+    ST = { id: null, slug: null, title: "", description: "", blocks: [], style: { fg: "#111111", bg: "#ffffff", shape: "square" }, password: "", lockOn: false, hasPw: false, active: true, pub: false };
     if (id) {
       $app.innerHTML = '<div class="loading"><div class="spin"></div></div>';
       var r = await sb.from("qr_codes").select(COLS).eq("id", id).single();
       if (r.error) { toast("QR nahi mila"); location.hash = "#/"; return; }
-      var q = r.data; ST.id = q.id; ST.slug = q.slug; ST.title = q.title; ST.description = q.description; ST.blocks = q.blocks || []; ST.style = q.style || ST.style; ST.hasPw = q.has_password; ST.lockOn = q.has_password; ST.active = q.is_active;
+      var q = r.data; ST.id = q.id; ST.slug = q.slug; ST.title = q.title; ST.description = q.description; ST.blocks = q.blocks || []; ST.style = q.style || ST.style; ST.hasPw = q.has_password; ST.lockOn = q.has_password; ST.active = q.is_active; ST.pub = !!q.public_index;
     }
     drawEditor();
   }
@@ -457,7 +457,8 @@
       '<div class="seg" style="margin:0">' + ["square", "rounded", "dots"].map(function (s) { return '<button type="button" data-sh="' + s + '" class="' + (ST.style.shape === s ? "on" : "") + '">' + { square: "Square", rounded: "Rounded", dots: "Dots" }[s] + "</button>"; }).join("") + "</div></div>" +
       '<div class="card"><h3>' + ic("shield", 17) + ' Security</h3><div class="sw"><div class="tx"><b>Password lock</b><small>Scan karne wale ko password dena padega</small></div><input type="checkbox" id="lk"' + (ST.lockOn ? " checked" : "") + '></div>' +
       '<label class="inp" id="pwbox" style="margin:12px 0 0;' + (ST.lockOn ? "" : "display:none") + '">' + ic("key") + '<input id="pw" type="text" autocomplete="off" placeholder="' + (ST.hasPw ? "Naya password (khali = wahi rahega)" : "QR ka password") + '" value="' + esc(ST.password) + '"></label>' +
-      '<div class="sw" style="margin-top:8px"><div class="tx"><b>QR active hai</b><small>Band karoge to scan par "not found" aayega</small></div><input type="checkbox" id="act"' + (ST.active ? " checked" : "") + "></div></div>" +
+      '<div class="sw" style="margin-top:8px"><div class="tx"><b>QR active hai</b><small>Band karoge to scan par "not found" aayega</small></div><input type="checkbox" id="act"' + (ST.active ? " checked" : "") + "></div>" +
+      '<div class="sw" style="margin-top:8px"><div class="tx"><b>Google par dikhao</b><small>ON karoge to is QR ka title aur text Google search mein aa sakta hai (password lock ke saath nahi chalega)</small></div><input type="checkbox" id="pub"' + (ST.pub && !ST.lockOn ? " checked" : "") + "></div></div>" +
       '<div class="err" id="ee" style="text-align:center"></div><div class="savebar"><div><button class="btn block" id="save">' + ic("check") + " Save karo</button></div></div>";
     $app.innerHTML = '<div class="screen noNav">' + h + "</div>"; bindGo(); window.scrollTo(0, y); wireEditor(); updatePreview();
   }
@@ -473,7 +474,7 @@
     $("#bg").oninput = function (e) { ST.style.bg = e.target.value; $$(".presets button").forEach(function (b) { b.classList.remove("on"); }); updatePreview(); };
     $$("[data-p]").forEach(function (b) { b.onclick = function () { var p = PRESETS[+b.getAttribute("data-p")]; ST.style.fg = p.fg; ST.style.bg = p.bg; drawEditor(); }; });
     $$("[data-sh]").forEach(function (b) { b.onclick = function () { ST.style.shape = b.getAttribute("data-sh"); drawEditor(); }; });
-    $("#lk").onchange = function (e) { ST.lockOn = e.target.checked; $("#pwbox").style.display = ST.lockOn ? "" : "none"; }; $("#pw").oninput = function (e) { ST.password = e.target.value; }; $("#act").onchange = function (e) { ST.active = e.target.checked; };
+    $("#lk").onchange = function (e) { ST.lockOn = e.target.checked; $("#pwbox").style.display = ST.lockOn ? "" : "none"; if (ST.lockOn && ST.pub) { ST.pub = false; $("#pub").checked = false; toast("Password lock ON hai, isliye Google par dikhana band kiya"); } }; $("#pub").onchange = function (e) { if (e.target.checked && ST.lockOn) { e.target.checked = false; toast("Pehle password lock band karo"); return; } ST.pub = e.target.checked; }; $("#pw").oninput = function (e) { ST.password = e.target.value; }; $("#act").onchange = function (e) { ST.active = e.target.checked; };
     $("#addb").onclick = function () {
       sheet('<h2>Kya add karna hai?</h2><p class="hint center" style="margin:0 0 16px">Video save nahi hota. Baaki sab chalega.</p><div class="tiles">' + Object.keys(TYPES).map(function (k) { return '<button class="tile" data-add="' + k + '"><span class="bd">' + ic(TYPES[k].icon) + "</span>" + esc(TYPES[k].name) + "</button>"; }).join("") + "</div>", function (sh) {
         sh.onclick = function (e) { var b = e.target.closest("[data-add]"); if (!b) return; ST.blocks.push(newBlock(b.getAttribute("data-add"))); closeSheet(); drawEditor(); window.scrollTo(0, document.body.scrollHeight); };
@@ -514,9 +515,9 @@
     if (!ST.lockOn) pw = ST.hasPw ? "" : null; else if (ST.password) pw = ST.password; else if (!ST.hasPw) { err.textContent = "Password lock ON hai – password likho."; return; }
     var blocks = ST.blocks.map(function (b) { return { id: b.id, type: b.type, label: b.label || "", value: b.value || "", extra: b.extra || "", url: b.url || "", path: b.path || "" }; });
     $("#save").disabled = true;
-    var r = await sb.rpc("qr_save", { p_id: ST.id, p_title: ST.title.trim(), p_description: ST.description, p_blocks: blocks, p_style: ST.style, p_password: pw, p_active: ST.active });
+    var r = await sb.rpc("qr_save", { p_id: ST.id, p_title: ST.title.trim(), p_description: ST.description, p_blocks: blocks, p_style: ST.style, p_password: pw, p_active: ST.active, p_public: ST.pub && !ST.lockOn });
     $("#save").disabled = false; if (r.error) { err.textContent = r.error.message; return; }
-    var q = r.data, isNew = !ST.id; ST.id = q.id; ST.slug = q.slug; ST.hasPw = q.has_password; ST.lockOn = q.has_password; ST.password = "";
+    var q = r.data, isNew = !ST.id; ST.id = q.id; ST.slug = q.slug; ST.hasPw = q.has_password; ST.lockOn = q.has_password; ST.pub = !!q.public_index; ST.password = "";
     if (isNew) history.replaceState(null, "", "#/edit/" + q.id);
     drawEditor(); toast("Save ho gaya ✅ – ab QR download karo");
   }
@@ -535,7 +536,7 @@
       }
       document.title = d.title + " – " + (CFG.APP_NAME || "Qrown");
       $app.innerHTML = '<div class="view"><div class="vhead rise"><div class="chip">' + ic("qr", 14) + ' QROWN</div><h1>' + esc(d.title) + "</h1>" + (d.description ? "<p>" + linkify(d.description) + "</p>" : "") + "</div>" + (d.blocks || []).map(renderBlock).join("") + '<div class="shr"><button class="btn ghost" id="vshare">' + ic("ext") + ' Share</button><button class="btn ghost" id="vcopy">' + ic("copy") + ' Link copy</button></div><div class="foot">Made with <a href="/">Qrown</a> · apna QR banao</div><div class="links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer">Report this QR</a></div></div>'; bindViewer();
-      var rb = document.querySelector('meta[name=robots]'); if (rb) rb.content = "noindex,nofollow";
+      var rb = document.querySelector('meta[name=robots]'); if (rb && !rb.hasAttribute("data-pub")) rb.content = "noindex,nofollow";
     }
     load();
   }
