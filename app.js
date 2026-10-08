@@ -144,7 +144,7 @@
 
   function nav() {
     return '<div class="nav"><div class="logo" data-go="#/">' + esc(CFG.APP_NAME || "QRaura") + '</div><div class="row">' +
-      (canInstall() ? '<button class="btn sm" id="install">📲 App install</button>' : "") + (session ? '<span class="small">' + esc(session.user.email || "") + '</span><button class="btn ghost sm" id="logout">Logout</button>' : "") + "</div></div>";
+      (canInstall() ? '<button class="btn sm" id="install">📲 App install</button>' : "") + (session ? '<span class="small">' + esc((session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || session.user.email || "") + '</span><button class="btn ghost sm" id="logout">Logout</button>' : "") + "</div></div>";
   }
   function bindNav() {
     var ib = $("#install"); if (ib) ib.onclick = doInstall;
@@ -157,11 +157,16 @@
       '<div class="hero"><h1>Apna <span class="grad">QR</span> banao.<br>Sab kuch usme chhupao.</h1>' +
       "<p>Text, photo, file, link, WhatsApp, UPI – jo marzi add karo. Koi bhi scan kare to sab kuch mil jayega. Unlimited QR, free download.</p></div>" +
       '<div class="card auth"><div class="row" style="margin-bottom:12px"><button class="btn grow" id="tabin">Login</button><button class="btn ghost grow" id="tabup">Sign up</button></div>' +
+      '<button class="btn ghost" style="width:100%;margin-bottom:12px" id="gbtn" type="button"><svg width="18" height="18" viewBox="0 0 48 48" style="vertical-align:-3px;margin-right:8px"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>Google se Continue karo</button><div class="small" style="text-align:center;margin-bottom:12px">— ya email se —</div>' +
       '<form id="af"><label class="field"><span>Email</span><input type="email" id="em" required autocomplete="email"></label>' +
       '<label class="field"><span>Password (min 6)</span><input type="password" id="pw" required minlength="6" autocomplete="current-password"></label>' +
       '<div class="err" id="ae"></div><button class="btn" style="width:100%" id="asub">Login</button></form></div>' +
       '<div class="feat"><div>📝 Text, links, UPI, numbers<br><span class="small">Sab ek QR mein</span></div><div>🖼️ Photos &amp; PDF<br><span class="small">PDF 40MB tak (video nahi)</span></div><div>🔒 Password lock<br><span class="small">Sirf jise aap password do</span></div><div>🎨 Colors &amp; shapes<br><span class="small">PNG / SVG download</span></div></div></div>';
     bindNav();
+    $("#gbtn").onclick = async function () {
+      var r = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/" } });
+      if (r.error) { $("#ae").textContent = r.error.message.indexOf("provider") >= 0 ? "Google login abhi enable nahi hai (Supabase → Authentication → Providers → Google)." : r.error.message; }
+    };
     var mode = "in";
     function setMode(m) { mode = m; $("#tabin").className = "btn grow" + (m === "in" ? "" : " ghost"); $("#tabup").className = "btn grow" + (m === "up" ? "" : " ghost"); $("#asub").textContent = m === "in" ? "Login" : "Create account"; }
     $("#tabin").onclick = function () { setMode("in"); }; $("#tabup").onclick = function () { setMode("up"); };
@@ -188,7 +193,7 @@
       h += '<div class="card qrcard" data-id="' + q.id + '"><canvas></canvas><h3>' + esc(q.title) + "</h3>" +
         '<div class="meta">' + (q.is_active ? '<span class="pill ok">Active</span>' : '<span class="pill bad">Off</span>') + (q.has_password ? ' <span class="pill">🔒 Locked</span>' : "") + " · 👁 " + q.scan_count + " scans · " + q.blocks.length + " items</div>" +
         '<div class="row"><button class="btn sm" data-a="png">PNG</button><button class="btn sm" data-a="svg">SVG</button><button class="btn sm ghost" data-a="copy">Copy link</button></div>' +
-        '<div class="row"><button class="btn sm ghost" data-a="open">Open</button><button class="btn sm ghost" data-a="edit">Edit</button><button class="btn sm danger" data-a="del">Delete</button></div></div>';
+        '<div class="row"><button class="btn sm ghost" data-a="open">Open</button><button class="btn sm ghost" data-a="edit">Edit</button><button class="btn sm ghost" data-a="rename">✏️ Naam</button><button class="btn sm danger" data-a="del">Delete</button></div></div>';
     });
     $("#list").innerHTML = h + "</div>";
     document.querySelectorAll(".qrcard").forEach(function (el) {
@@ -201,6 +206,11 @@
         else if (a === "copy") { try { await navigator.clipboard.writeText(shareUrl(q.slug)); toast("Link copy ho gaya"); } catch (x) { prompt("Copy link:", shareUrl(q.slug)); } }
         else if (a === "open") window.open(shareUrl(q.slug), "_blank");
         else if (a === "edit") location.hash = "#/edit/" + q.id;
+        else if (a === "rename") {
+          var nn = prompt("Naya naam:", q.title); if (nn === null || !nn.trim()) return;
+          var rr = await sb.rpc("qr_save", { p_id: q.id, p_title: nn.trim(), p_description: q.description, p_blocks: q.blocks, p_style: q.style, p_password: null, p_active: q.is_active });
+          if (rr.error) toast(rr.error.message); else { toast("Naam badal gaya ✅"); dashboard(); }
+        }
         else if (a === "del" && confirm("Ye QR delete karna hai? Printed QR kaam karna band kar dega.")) {
           var d = await sb.from("qr_codes").delete().eq("id", q.id);
           if (d.error) toast(d.error.message); else { cleanupFiles(q.blocks); dashboard(); }
