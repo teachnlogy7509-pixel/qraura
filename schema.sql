@@ -45,6 +45,10 @@ begin
   if uid is null then raise exception 'login required'; end if;
   if jsonb_typeof(coalesce(p_blocks,'[]'::jsonb)) <> 'array' then raise exception 'blocks must be array'; end if;
   if jsonb_array_length(coalesce(p_blocks,'[]'::jsonb)) > 60 then raise exception 'too many blocks'; end if;
+  if exists (
+    select 1 from jsonb_array_elements(coalesce(p_blocks,'[]'::jsonb)) b
+    where coalesce(b->>'type','') not in ('text','link','image','file','detail','phone','whatsapp','email','location','upi')
+  ) then raise exception 'unsupported block type (video is not allowed)'; end if;
   if length(coalesce(p_blocks,'[]'::jsonb)::text) > 200000 then raise exception 'content too large'; end if;
 
   if p_id is null then
@@ -102,10 +106,17 @@ begin
 end $$;
 grant execute on function public.qr_scan(text,text) to anon, authenticated;
 
--- Storage bucket for images/files (10 MB per file)
-insert into storage.buckets (id, name, public, file_size_limit)
-values ('qr-files','qr-files', true, 10485760)
-on conflict (id) do update set file_size_limit = 10485760;
+-- Storage bucket: photos + PDF/documents only (NO video/audio), max 40 MB per file.
+-- Note: Supabase's global upload limit (Dashboard -> Storage -> Settings) must be >= 40 MB (free plan max is 50 MB).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('qr-files','qr-files', true, 41943040, array[
+  'image/jpeg','image/png','image/webp','image/gif','image/avif','image/heic','image/heif',
+  'application/pdf','text/plain',
+  'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation'
+])
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types, public = true;
 
 drop policy if exists qr_files_insert on storage.objects;
 create policy qr_files_insert on storage.objects for insert to authenticated

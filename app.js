@@ -88,9 +88,9 @@
   var TYPES = {
     text:     { icon: "📝", name: "Text / Message", fields: [["label", "Heading (optional)"], ["value", "Text", "area"]] },
     link:     { icon: "🔗", name: "Link",           fields: [["label", "Button name"], ["value", "URL (https://...)"]] },
-    image:    { icon: "🖼️", name: "Photo",          fields: [["label", "Caption (optional)"]], upload: "image/*" },
-    file:     { icon: "📎", name: "File / PDF",     fields: [["label", "File name"]], upload: "*/*" },
-    video:    { icon: "▶️", name: "Video (YouTube/link)", fields: [["label", "Title (optional)"], ["value", "Video URL"]] },
+    image:    { icon: "🖼️", name: "Photo",          fields: [["label", "Caption (optional)"]], upload: "image/*", maxMB: 15, hint: "Photo (max 15MB)" },
+    file:     { icon: "📎", name: "PDF / Document", fields: [["label", "File name"]], upload: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,application/pdf", maxMB: 40, hint: "PDF ya document (max 40MB)" },
+    detail:   { icon: "🔢", name: "Number / Detail (copy)", fields: [["label", "Title (e.g. Account No, IFSC, Aadhaar)"], ["value", "Value"]] },
     phone:    { icon: "📞", name: "Phone call",     fields: [["label", "Name"], ["value", "Phone number"]] },
     whatsapp: { icon: "💬", name: "WhatsApp",       fields: [["label", "Name"], ["value", "Number with country code, e.g. 919876543210"], ["extra", "Pre-filled message (optional)"]] },
     email:    { icon: "✉️", name: "Email",          fields: [["label", "Name"], ["value", "Email address"]] },
@@ -99,10 +99,6 @@
   };
   function newBlock(type) { return { id: uid(), type: type, label: "", value: "", extra: "", url: "", path: "" }; }
 
-  function youtubeEmbed(u) {
-    var m = String(u).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
-    return m ? "https://www.youtube-nocookie.com/embed/" + m[1] : "";
-  }
   function renderBlock(b) {
     var T = TYPES[b.type]; if (!T) return "";
     var lb = b.label ? '<div class="lb">' + esc(b.label) + "</div>" : "";
@@ -112,18 +108,34 @@
       case "link": { var u = safeUrl(v); return u ? '<div class="vb"><a class="act" target="_blank" rel="noopener noreferrer" href="' + esc(u) + '">' + esc(b.label || v) + "</a></div>" : ""; }
       case "image": { var iu = safeUrl(b.url || v); return iu ? '<div class="vb">' + lb + '<img loading="lazy" alt="' + esc(b.label || "image") + '" src="' + esc(iu) + '"></div>' : ""; }
       case "file": { var fu = safeUrl(b.url || v); return fu ? '<div class="vb"><a class="act" target="_blank" rel="noopener noreferrer" href="' + esc(fu) + '">📎 ' + esc(b.label || "Download file") + "</a></div>" : ""; }
-      case "video": { var e = youtubeEmbed(v), vu = safeUrl(v);
-        if (e) return '<div class="vb">' + lb + '<iframe src="' + e + '" allowfullscreen loading="lazy"></iframe></div>';
-        return vu ? '<div class="vb"><a class="act" target="_blank" rel="noopener noreferrer" href="' + esc(vu) + '">▶️ ' + esc(b.label || "Watch video") + "</a></div>" : ""; }
+      case "detail": return '<div class="vb">' + lb + '<div class="row"><div class="tx grow" style="font-weight:600">' + esc(v) + '</div><button class="btn sm ghost" data-copy="' + esc(v) + '">Copy</button></div></div>';
       case "phone": return '<div class="vb"><a class="act" href="tel:' + esc(digits(v)) + '">📞 ' + esc(b.label ? b.label + " – " + v : v) + "</a></div>";
       case "whatsapp": return '<div class="vb"><a class="act" target="_blank" rel="noopener noreferrer" href="https://wa.me/' + esc(digits(v).replace(/^\+/, "")) + (b.extra ? "?text=" + encodeURIComponent(b.extra) : "") + '">💬 ' + esc(b.label || "WhatsApp") + "</a></div>";
       case "email": return '<div class="vb"><a class="act" href="mailto:' + esc(v) + '">✉️ ' + esc(b.label ? b.label + " – " + v : v) + "</a></div>";
       case "location": { var q = /^https?:\/\//i.test(v) ? v : "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(v);
         return '<div class="vb"><a class="act" target="_blank" rel="noopener noreferrer" href="' + esc(q) + '">📍 ' + esc(b.label || v) + "</a></div>"; }
-      case "upi": return '<div class="vb"><a class="act" href="upi://pay?pa=' + encodeURIComponent(v) + "&pn=" + encodeURIComponent(b.label || "") + '">💸 Pay ' + esc(b.label || v) + "</a><div class=\"small\">" + esc(v) + "</div></div>";
+      case "upi": return '<div class="vb"><a class="act" href="upi://pay?pa=' + encodeURIComponent(v) + "&pn=" + encodeURIComponent(b.label || "") + '">💸 Pay ' + esc(b.label || v) + '</a><div class="row" style="margin-top:6px"><span class="small grow">' + esc(v) + '</span><button class="btn sm ghost" data-copy="' + esc(v) + '">Copy UPI ID</button></div></div>';
     }
     return "";
   }
+
+  /* ---------- PWA install ---------- */
+  var deferredPrompt = null;
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  var isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  function canInstall() { return !isStandalone && (deferredPrompt || isIOS); }
+  async function doInstall() {
+    if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; var b = document.getElementById("install"); if (b) b.remove(); }
+    else if (isIOS) alert("iPhone par: Safari mein Share (⬆️) dabao → 'Add to Home Screen'.");
+  }
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferredPrompt = e; var n = document.querySelector(".nav .row"); if (n && !document.getElementById("install")) { var b = document.createElement("button"); b.className = "btn sm"; b.id = "install"; b.textContent = "📲 App install"; b.onclick = doInstall; n.prepend(b); } });
+  window.addEventListener("appinstalled", function () { var b = document.getElementById("install"); if (b) b.remove(); toast("App install ho gaya ✅"); });
+  document.addEventListener("click", async function (e) {
+    var t = e.target.closest && e.target.closest("[data-copy]"); if (!t) return;
+    var v = t.getAttribute("data-copy");
+    try { await navigator.clipboard.writeText(v); toast("Copy ho gaya"); } catch (x) { prompt("Copy karo:", v); }
+  });
+  if ("serviceWorker" in navigator) window.addEventListener("load", function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); });
 
   /* ---------- views ---------- */
   function setupScreen() {
@@ -132,9 +144,10 @@
 
   function nav() {
     return '<div class="nav"><div class="logo" data-go="#/">' + esc(CFG.APP_NAME || "QRaura") + '</div><div class="row">' +
-      (session ? '<span class="small">' + esc(session.user.email || "") + '</span><button class="btn ghost sm" id="logout">Logout</button>' : "") + "</div></div>";
+      (canInstall() ? '<button class="btn sm" id="install">📲 App install</button>' : "") + (session ? '<span class="small">' + esc(session.user.email || "") + '</span><button class="btn ghost sm" id="logout">Logout</button>' : "") + "</div></div>";
   }
   function bindNav() {
+    var ib = $("#install"); if (ib) ib.onclick = doInstall;
     var l = $("#logout"); if (l) l.onclick = function () { sb.auth.signOut(); };
     document.querySelectorAll("[data-go]").forEach(function (e) { e.onclick = function () { location.hash = e.getAttribute("data-go"); }; });
   }
@@ -147,7 +160,7 @@
       '<form id="af"><label class="field"><span>Email</span><input type="email" id="em" required autocomplete="email"></label>' +
       '<label class="field"><span>Password (min 6)</span><input type="password" id="pw" required minlength="6" autocomplete="current-password"></label>' +
       '<div class="err" id="ae"></div><button class="btn" style="width:100%" id="asub">Login</button></form></div>' +
-      '<div class="feat"><div>📝 Text, links, contact<br><span class="small">Sab ek QR mein</span></div><div>🖼️ Photos &amp; files<br><span class="small">10MB tak upload</span></div><div>🔒 Password lock<br><span class="small">Sirf jise aap password do</span></div><div>🎨 Colors &amp; shapes<br><span class="small">PNG / SVG download</span></div></div></div>';
+      '<div class="feat"><div>📝 Text, links, UPI, numbers<br><span class="small">Sab ek QR mein</span></div><div>🖼️ Photos &amp; PDF<br><span class="small">PDF 40MB tak (video nahi)</span></div><div>🔒 Password lock<br><span class="small">Sirf jise aap password do</span></div><div>🎨 Colors &amp; shapes<br><span class="small">PNG / SVG download</span></div></div></div>';
     bindNav();
     var mode = "in";
     function setMode(m) { mode = m; $("#tabin").className = "btn grow" + (m === "in" ? "" : " ghost"); $("#tabup").className = "btn grow" + (m === "up" ? "" : " ghost"); $("#asub").textContent = m === "in" ? "Login" : "Create account"; }
@@ -200,6 +213,30 @@
     if (paths.length) sb.storage.from("qr-files").remove(paths);
   }
 
+  function uploadFile(path, file, onProgress) {
+    return new Promise(function (resolve, reject) {
+      sb.auth.getSession().then(function (r) {
+        var tok = r.data.session && r.data.session.access_token;
+        if (!tok) return reject(new Error("login expire ho gaya, dobara login karo"));
+        var x = new XMLHttpRequest();
+        x.open("POST", CFG.SUPABASE_URL + "/storage/v1/object/qr-files/" + path.split("/").map(encodeURIComponent).join("/"));
+        x.setRequestHeader("Authorization", "Bearer " + tok);
+        x.setRequestHeader("apikey", CFG.SUPABASE_ANON_KEY);
+        x.setRequestHeader("x-upsert", "false");
+        x.setRequestHeader("cache-control", "max-age=31536000");
+        x.upload.onprogress = function (e) { if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100)); };
+        x.onload = function () {
+          if (x.status >= 200 && x.status < 300) return resolve();
+          var m = "status " + x.status; try { m = JSON.parse(x.responseText).message || m; } catch (e) {}
+          reject(new Error(m));
+        };
+        x.onerror = function () { reject(new Error("network error")); };
+        x.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        x.send(file);
+      });
+    });
+  }
+
   var ST = null; // editor state
   async function editor(id) {
     ST = { id: null, slug: null, title: "", description: "", blocks: [], style: { fg: "#111111", bg: "#ffffff", shape: "square" }, password: "", clearPw: false, hasPw: false, active: true };
@@ -217,7 +254,8 @@
       h += '<label class="field"><span>' + esc(f[1]) + "</span>" + (f[2] === "area" ? '<textarea data-f="' + f[0] + '">' + esc(b[f[0]]) + "</textarea>" : '<input data-f="' + f[0] + '" value="' + esc(b[f[0]]) + '">') + "</label>";
     });
     if (T.upload) {
-      h += '<div class="field"><span>' + (b.url ? "✅ Uploaded" : "File chuno (max 10MB)") + '</span><input type="file" data-up accept="' + T.upload + '"></div>';
+      h += '<div class="field"><span>' + (b.url ? "✅ Uploaded – naya chuno to replace ho jayega" : esc(T.hint)) + '</span><input type="file" data-up accept="' + T.upload + '"></div>' +
+        '<div class="upbar" style="display:none"><div class="upline"><div class="upfill"></div></div><div class="small uptxt"></div></div>';
       if (b.type === "image" && b.url) h += '<img src="' + esc(b.url) + '" style="max-width:100%;max-height:140px;border-radius:8px">';
     }
     return h + "</div>";
@@ -270,12 +308,15 @@
       var up = $("[data-up]", el);
       if (up) up.onchange = async function () {
         var f = up.files[0]; if (!f) return;
-        if (f.size > 10 * 1024 * 1024) { toast("File 10MB se badi hai"); up.value = ""; return; }
-        toast("Uploading…");
-        var ext = (f.name.split(".").pop() || "bin").replace(/[^a-z0-9]/gi, "").slice(0, 8) || "bin";
+        var T = TYPES[b.type], ext = (f.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8) || "bin";
+        if (/^(video|audio)\//.test(f.type) || /^(mp4|mov|mkv|avi|webm|m4v|3gp|flv|wmv|mpg|mpeg|mp3|wav)$/.test(ext)) { toast("Video/audio save nahi ho sakta 🚫"); up.value = ""; return; }
+        if (b.type === "image" && f.type && f.type.indexOf("image/") !== 0) { toast("Sirf photo chuno"); up.value = ""; return; }
+        if (f.size > T.maxMB * 1024 * 1024) { toast("File " + T.maxMB + "MB se badi hai"); up.value = ""; return; }
+        var bar = $(".upbar", el); bar.style.display = "block"; var fill = $(".upfill", bar), txt = $(".uptxt", bar);
         var path = session.user.id + "/" + uid() + uid() + "." + ext;
-        var r = await sb.storage.from("qr-files").upload(path, f, { contentType: f.type || "application/octet-stream", upsert: false });
-        if (r.error) { toast(r.error.message); return; }
+        try {
+          await uploadFile(path, f, function (p) { fill.style.width = p + "%"; txt.textContent = "Uploading " + p + "% (" + (f.size / 1048576).toFixed(1) + " MB)"; });
+        } catch (e) { bar.style.display = "none"; toast("Upload fail: " + e.message); return; }
         if (b.path) sb.storage.from("qr-files").remove([b.path]);
         b.path = path; b.url = sb.storage.from("qr-files").getPublicUrl(path).data.publicUrl;
         if (!b.label && b.type === "file") b.label = f.name;

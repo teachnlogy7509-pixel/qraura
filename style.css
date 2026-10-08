@@ -58,3 +58,5 @@ input[type=checkbox]{width:auto}
 .feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:26px 0}
 .feat div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
 .small{font-size:13px;color:var(--mut)}
+.upline{height:8px;background:var(--card);border-radius:99px;overflow:hidden;border:1px solid var(--line);margin-bottom:4px}
+.upfill{height:100%;width:0;background:linear-gradient(90deg,var(--a),var(--b));transition:width .15s}
