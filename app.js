@@ -110,21 +110,40 @@
 
   function action(href, icon, title, sub, external) { return '<a class="vb" ' + (external ? 'target="_blank" rel="noopener noreferrer" ' : "") + 'href="' + esc(href) + '"><span class="vi">' + ic(icon) + '</span><span class="vt"><b>' + esc(title) + "</b>" + (sub ? "<small>" + esc(sub) + "</small>" : "") + '</span><span class="vch">' + ic("chev") + "</span></a>"; }
   function card(icon, inner) { return '<div class="vb"><span class="vi">' + ic(icon) + '</span><span class="vt">' + inner + "</span></div>"; }
+  function linkify(t) { return esc(t).replace(/(https?:\/\/[^\s<]+)/g, function (m) { var tail = ""; var x = m.match(/(?:[.,;:!?)]|&quot;|&#39;)+$/); if (x) { tail = x[0]; m = m.slice(0, -tail.length); } return '<a href="' + m + '" target="_blank" rel="noopener noreferrer">' + m + "</a>" + tail; }); }
+  function dlUrl(u, name) { return u + (u.indexOf("?") < 0 ? "?" : "&") + "download=" + encodeURIComponent(name || "file"); }
+  function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return u; } }
   function renderBlock(b) {
     var T = TYPES[b.type]; if (!T) return ""; var v = b.value || "";
     switch (b.type) {
-      case "text": return card("text", (b.label ? "<b>" + esc(b.label) + "</b>" : "") + '<div class="tx">' + esc(v) + "</div>");
-      case "link": { var u = safeUrl(v); return u ? action(u, "link", b.label || v, b.label ? v : "", true) : ""; }
-      case "image": { var iu = safeUrl(b.url || v); return iu ? '<div class="vb col"><img loading="lazy" alt="' + esc(b.label || "image") + '" src="' + esc(iu) + '">' + (b.label ? '<div class="cap">' + esc(b.label) + "</div>" : "") + "</div>" : ""; }
-      case "file": { var fu = safeUrl(b.url || v); return fu ? action(fu, "file", b.label || "Document", "Open / Download", true) : ""; }
-      case "detail": return '<div class="vb"><span class="vi">' + ic("hash") + '</span><span class="vt">' + (b.label ? "<small>" + esc(b.label) + "</small>" : "") + "<b>" + esc(v) + '</b></span><button class="btn sm ghost" data-copy="' + esc(v) + '">' + ic("copy") + "</button></div>";
-      case "phone": return action("tel:" + digits(v), "phone", b.label || "Call karo", v);
+      case "text": return '<div class="vb col txb">' + (b.label ? '<div class="txh">' + esc(b.label) + "</div>" : "") + '<div class="tx">' + linkify(v) + '</div><button class="btn sm ghost cpy" data-copy="' + esc(v) + '">' + ic("copy") + " Copy text</button></div>";
+      case "link": { var u = safeUrl(v); return u ? action(u, "link", b.label || hostOf(u), b.label ? hostOf(u) : "Kholne ke liye dabao", true) : ""; }
+      case "image": { var iu = safeUrl(b.url || v); return iu ? '<figure class="vb col pic"><div class="ph sk"><img data-zoom="' + esc(iu) + '" data-cap="' + esc(b.label || "") + '" decoding="async" loading="lazy" alt="' + esc(b.label || "photo") + '" src="' + esc(iu) + '"></div>' + (b.label ? '<figcaption class="cap">' + esc(b.label) + "</figcaption>" : "") + '<div class="row2"><button class="btn sm ghost" data-view="' + esc(iu) + '" data-cap="' + esc(b.label || "") + '">' + ic("eye") + ' Zoom</button><a class="btn sm ghost" href="' + esc(dlUrl(iu, b.label || "photo")) + '">' + ic("download") + " Save</a></div></figure>" : ""; }
+      case "file": { var fu = safeUrl(b.url || v); if (!fu) return ""; var fx = ((b.path || "").split(".").pop() || "file").toUpperCase().slice(0, 4); var fname = b.label || "Document"; return '<div class="vb col filec"><div class="frow"><span class="fext">' + esc(fx) + '</span><span class="vt"><b>' + esc(fname) + "</b><small>Document</small></span></div>" + '<div class="row2"><a class="btn sm" target="_blank" rel="noopener noreferrer" href="' + esc(fu) + '">' + ic("eye") + ' Dekho</a><a class="btn sm ghost" href="' + esc(dlUrl(fu, /\.[a-z0-9]{2,5}$/i.test(fname) ? fname : fname + "." + fx.toLowerCase())) + '">' + ic("download") + " Download</a></div></div>"; }
+      case "detail": return '<div class="vb"><span class="vi">' + ic("hash") + '</span><span class="vt">' + (b.label ? "<small>" + esc(b.label) + "</small>" : "") + "<b>" + esc(v) + '</b></span><button class="btn sm ghost" data-copy="' + esc(v) + '" aria-label="Copy">' + ic("copy") + "</button></div>";
+      case "phone": return '<div class="vb"><span class="vi">' + ic("phone") + '</span><span class="vt"><b>' + esc(b.label || "Call karo") + "</b><small>" + esc(v) + '</small></span><button class="btn sm ghost" data-copy="' + esc(v) + '" aria-label="Copy">' + ic("copy") + '</button><a class="btn sm" href="tel:' + esc(digits(v)) + '">Call</a></div>';
       case "whatsapp": return action("https://wa.me/" + digits(v).replace(/^\+/, "") + (b.extra ? "?text=" + encodeURIComponent(b.extra) : ""), "chat", b.label || "WhatsApp", "Chat kholo", true);
       case "email": return action("mailto:" + v, "mail", b.label || "Email bhejo", v);
-      case "location": return action(/^https?:\/\//i.test(v) ? v : "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(v), "pin", b.label || v, b.label ? v : "Maps mein kholo", true);
-      case "upi": return '<div class="vb col"><a class="vb" style="margin:0" href="upi://pay?pa=' + encodeURIComponent(v) + "&pn=" + encodeURIComponent(b.label || "") + '"><span class="vi">' + ic("rupee") + '</span><span class="vt"><b>Pay ' + esc(b.label || "") + "</b><small>" + esc(v) + '</small></span><span class="vch">' + ic("chev") + '</span></a><button class="btn sm ghost block" style="margin-top:10px" data-copy="' + esc(v) + '">' + ic("copy") + " UPI ID copy karo</button></div>";
+      case "location": { var isU = /^https?:\/\//i.test(v), lu = isU ? v : "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(v);
+        return '<div class="vb col locc"><a class="frow" style="color:inherit;text-decoration:none" target="_blank" rel="noopener noreferrer" href="' + esc(lu) + '"><span class="vi">' + ic("pin") + '</span><span class="vt"><b>' + esc(b.label || (isU ? "Location" : v)) + "</b><small>" + esc(b.label && !isU ? v : "Maps mein kholo") + '</small></span><span class="vch">' + ic("chev") + "</span></a>" +
+          (isU ? "" : '<iframe class="map" loading="lazy" referrerpolicy="no-referrer" title="Map" src="https://maps.google.com/maps?q=' + encodeURIComponent(v) + '&output=embed&z=15"></iframe>') + "</div>"; }
+      case "upi": return '<div class="vb col"><a class="frow" style="color:inherit;text-decoration:none" href="upi://pay?pa=' + encodeURIComponent(v) + "&pn=" + encodeURIComponent(b.label || "") + '"><span class="vi">' + ic("rupee") + '</span><span class="vt"><b>Pay ' + esc(b.label || "") + "</b><small>" + esc(v) + '</small></span><span class="vch">' + ic("chev") + '</span></a><button class="btn sm ghost block" style="margin-top:10px" data-copy="' + esc(v) + '">' + ic("copy") + " UPI ID copy karo</button></div>";
     }
     return "";
+  }
+  function lightbox(url, cap) {
+    var o = document.createElement("div"); o.className = "lb";
+    o.innerHTML = '<div class="lbt"><button class="icon-btn" aria-label="Close">' + ic("back") + '</button><span>' + esc(cap || "") + '</span><a class="icon-btn" aria-label="Save" href="' + esc(dlUrl(url, cap || "photo")) + '">' + ic("download") + '</a></div><div class="lbs"><img alt="" src="' + esc(url) + '"></div>';
+    document.body.appendChild(o); document.body.style.overflow = "hidden";
+    function close() { o.remove(); document.body.style.overflow = ""; }
+    $(".icon-btn", o).onclick = close; var im = $("img", o); im.onclick = function () { o.classList.toggle("z"); };
+  }
+  function bindViewer() {
+    $$("img[data-zoom]").forEach(function (im) { var ph = im.parentNode, done = function () { ph.classList.remove("sk"); }; if (im.complete) done(); else { im.onload = done; im.onerror = function () { ph.classList.remove("sk"); ph.innerHTML = '<div class="cap" style="padding:20px;text-align:center">Photo load nahi hui</div>'; }; } im.onclick = function () { lightbox(im.getAttribute("data-zoom"), im.getAttribute("data-cap")); }; });
+    $$("[data-view]").forEach(function (b) { b.onclick = function () { lightbox(b.getAttribute("data-view"), b.getAttribute("data-cap")); }; });
+    $$(".view > .vb, .view > .shr").forEach(function (e, i) { e.style.animation = "rise .5s both"; e.style.animationDelay = Math.min(i, 12) * 70 + "ms"; });
+    var sh = $("#vshare"); if (sh) sh.onclick = function () { var d = { title: document.title, url: location.href }; if (navigator.share) navigator.share(d).catch(function () {}); else copyText(location.href, "Link copy ho gaya ✅"); };
+    var cl = $("#vcopy"); if (cl) cl.onclick = function () { copyText(location.href, "Link copy ho gaya ✅"); };
   }
 
   /* ---------- shell, nav, sheets ---------- */
@@ -352,6 +371,18 @@
       });
     });
   }
+  async function squeeze(file) {
+    if (file.type && !/^image\/(jpeg|png|webp|bmp)$/.test(file.type)) return file;
+    if (file.size < 350 * 1024) return file;
+    try {
+      var bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+      var k = Math.min(1, 1920 / Math.max(bmp.width, bmp.height)), w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
+      var c = document.createElement("canvas"); c.width = w; c.height = h; var g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.drawImage(bmp, 0, 0, w, h);
+      var blob = await new Promise(function (r) { c.toBlob(r, "image/jpeg", 0.82); });
+      if (blob && blob.size < file.size) return new File([blob], "photo.jpg", { type: "image/jpeg" });
+    } catch (e) {}
+    return file;
+  }
   async function editor(id) {
     ST = { id: null, slug: null, title: "", description: "", blocks: [], style: { fg: "#111111", bg: "#ffffff", shape: "square" }, password: "", lockOn: false, hasPw: false, active: true };
     if (id) {
@@ -421,6 +452,7 @@
         if (/^(video|audio)\//.test(f.type) || /^(mp4|mov|mkv|avi|webm|m4v|3gp|flv|wmv|mpg|mpeg|mp3|wav)$/.test(ext)) { toast("Video/audio save nahi ho sakta 🚫"); up.value = ""; return; }
         if (b.type === "image" && f.type && f.type.indexOf("image/") !== 0) { toast("Sirf photo chuno"); up.value = ""; return; }
         if (f.size > T.maxMB * 1024 * 1024) { toast("File " + T.maxMB + "MB se badi hai"); up.value = ""; return; }
+        if (b.type === "image") { toast("Photo optimize ho rahi hai…"); var f2 = await squeeze(f); if (f2 !== f) { f = f2; ext = "jpg"; } }
         var bar = $(".upbar", el); bar.style.display = "block"; var fill = $(".upfill", bar), txt = $(".uptxt", bar), path = session.user.id + "/" + uid() + uid() + "." + ext;
         try { await uploadFile(path, f, function (p) { fill.style.width = p + "%"; txt.textContent = "Uploading " + p + "% (" + (f.size / 1048576).toFixed(1) + " MB)"; }); } catch (e) { bar.style.display = "none"; toast("Upload fail: " + e.message); return; }
         if (b.path) sb.storage.from("qr-files").remove([b.path]);
@@ -459,7 +491,7 @@
         $("#lf").onsubmit = function (e) { e.preventDefault(); pw = $("#lp").value; load(); }; return;
       }
       document.title = d.title + " – " + (CFG.APP_NAME || "Qrown");
-      $app.innerHTML = '<div class="view rise"><div class="vhead"><div class="chip">' + ic("qr", 14) + ' QROWN</div><h1>' + esc(d.title) + "</h1>" + (d.description ? "<p>" + esc(d.description) + "</p>" : "") + "</div>" + (d.blocks || []).map(renderBlock).join("") + '<div class="foot">Made with <a href="/">Qrown</a> · apna QR banao</div><div class="links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer">Report this QR</a></div></div>';
+      $app.innerHTML = '<div class="view"><div class="vhead rise"><div class="chip">' + ic("qr", 14) + ' QROWN</div><h1>' + esc(d.title) + "</h1>" + (d.description ? "<p>" + linkify(d.description) + "</p>" : "") + "</div>" + (d.blocks || []).map(renderBlock).join("") + '<div class="shr"><button class="btn ghost" id="vshare">' + ic("ext") + ' Share</button><button class="btn ghost" id="vcopy">' + ic("copy") + ' Link copy</button></div><div class="foot">Made with <a href="/">Qrown</a> · apna QR banao</div><div class="links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer">Report this QR</a></div></div>'; bindViewer();
       var rb = document.querySelector('meta[name=robots]'); if (rb) rb.content = "noindex,nofollow";
     }
     load();

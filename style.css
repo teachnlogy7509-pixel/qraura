@@ -248,3 +248,31 @@ details.faq summary::after{content:"+";color:var(--g1);font-size:20px;line-heigh
 details.faq[open] summary::after{content:"–"}
 details.faq p{margin:8px 0 0}
 .seo{padding:40px 22px;color:#d6d2dd;max-width:520px;margin:0 auto}.seo h1{color:#f8e2a0}.seo a{color:#f8e2a0}
+
+/* viewer upgrade */
+.view{max-width:560px}
+.vb.col{gap:0}
+.txb .txh{font-weight:700;font-size:17px;margin-bottom:8px;color:var(--g1)}
+.txb .tx{font-size:16.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.tx a,.vhead p a{color:var(--g1);text-decoration:underline;text-underline-offset:3px}
+.txb .cpy{align-self:flex-end;margin-top:12px}
+.pic{padding:10px}
+.pic .ph{border-radius:14px;overflow:hidden;min-height:140px;background:var(--s2)}
+.pic .ph.sk{background:linear-gradient(100deg,var(--s2) 30%,rgba(255,255,255,.08) 50%,var(--s2) 70%);background-size:200% 100%;animation:shim 1.3s infinite}
+@keyframes shim{to{background-position:-200% 0}}
+.pic img{width:100%;height:auto;display:block;border-radius:0;cursor:zoom-in}
+.pic .cap{margin:10px 4px 0;font-size:15px;color:var(--txt)}
+.row2{display:flex;gap:10px;margin-top:12px}.row2 .btn{flex:1}
+.frow{display:flex;align-items:center;gap:14px}
+.fext{width:52px;height:60px;border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:13px;letter-spacing:.04em;color:#fff;background:linear-gradient(160deg,#e23a4a,#8d1020);border:1px solid rgba(248,226,160,.5);flex:none;box-shadow:0 6px 18px rgba(212,32,47,.35)}
+.locc .map{width:100%;height:210px;border:0;border-radius:14px;margin-top:12px;background:var(--s2);filter:invert(.92) hue-rotate(180deg) saturate(.8)}
+.shr{display:flex;gap:10px;margin-top:22px}.shr .btn{flex:1}
+.lb{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.96);display:flex;flex-direction:column;animation:fade .2s}
+.lbt{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:max(12px,env(safe-area-inset-top)) 14px 10px}
+.lbt span{flex:1;text-align:center;color:var(--mut);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lbt .icon-btn{text-decoration:none;display:grid;place-items:center}
+.lbs{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;-webkit-overflow-scrolling:touch}
+.lbs img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in;transition:.2s}
+.lb.z .lbs{display:block}.lb.z .lbs img{max-width:none;max-height:none;width:230%;cursor:zoom-out}
+a.btn,.vb a.btn{text-decoration:none}
+figure.vb{margin:0 0 12px}.pic .row2 .btn{white-space:nowrap}
