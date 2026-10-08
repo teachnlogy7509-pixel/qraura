@@ -1,4 +1,4 @@
-# QRaura
+# Qrown
 
 Free QR platform: anyone can sign up, create unlimited QR codes that hide text, links, photos, files, WhatsApp, UPI etc., and download them (PNG/SVG). Scanning a QR opens a public page with everything inside (optional password lock).
 

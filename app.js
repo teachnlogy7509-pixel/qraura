@@ -1,6 +1,7 @@
 (function () {
   "use strict";
   var CFG = window.APP_CONFIG || {};
+  var BRAND = CFG.APP_NAME || "Qrown", IG = "ashish30945";
   var $app = document.getElementById("app");
   var sb = null, session = null;
 
@@ -54,7 +55,7 @@
     shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/>'
   };
   function ic(n, size) { return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"' + (size ? ' style="font-size:' + size + 'px"' : "") + ">" + (IC[n] || "") + "</svg>"; }
-  var LOGO = '<svg viewBox="0 0 64 64" fill="none"><defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8e2a0"/><stop offset=".55" stop-color="#dcaa48"/><stop offset="1" stop-color="#b07a1c"/></linearGradient></defs><g stroke="url(#gg)" stroke-width="4" stroke-linejoin="round"><rect x="6" y="6" width="20" height="20" rx="5"/><rect x="38" y="6" width="20" height="20" rx="5"/><rect x="6" y="38" width="20" height="20" rx="5"/></g><g fill="url(#gg)"><rect x="13" y="13" width="6" height="6" rx="1.5"/><rect x="45" y="13" width="6" height="6" rx="1.5"/><rect x="13" y="45" width="6" height="6" rx="1.5"/><rect x="38" y="38" width="8" height="8" rx="2"/><rect x="50" y="38" width="8" height="8" rx="2"/><rect x="38" y="50" width="8" height="8" rx="2"/><rect x="50" y="50" width="8" height="8" rx="2"/></g></svg>';
+  var LOGO = '<svg viewBox="0 0 64 64" fill="none"><defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8e2a0"/><stop offset=".55" stop-color="#dcaa48"/><stop offset="1" stop-color="#b07a1c"/></linearGradient></defs><path d="M8 24l13 12 11-22 11 22 13-12-5 24H13z" fill="url(#gg)" stroke="url(#gg)" stroke-width="3" stroke-linejoin="round"/><rect x="13" y="51" width="38" height="6" rx="3" fill="url(#gg)"/><circle cx="8" cy="22" r="4" fill="#e6303f"/><circle cx="32" cy="12" r="4.5" fill="#e6303f"/><circle cx="56" cy="22" r="4" fill="#e6303f"/><g fill="#1b1305"><rect x="22" y="38" width="5" height="5" rx="1"/><rect x="30" y="38" width="5" height="5" rx="1"/><rect x="38" y="38" width="5" height="5" rx="1"/><rect x="26" y="44" width="5" height="4" rx="1"/><rect x="34" y="44" width="5" height="4" rx="1"/></g></svg>';
 
   /* ---------- QR rendering (colors + shapes, PNG + SVG) ---------- */
   function makeModules(text) { var q = new window.QRCodeLib(-1, 2); q.addData(text); q.make(); var n = q.getModuleCount(), m = []; for (var r = 0; r < n; r++) { m[r] = []; for (var c = 0; c < n; c++) m[r][c] = q.isDark(r, c); } return m; }
@@ -225,7 +226,7 @@
 
   /* ---------- welcome / auth ---------- */
   function authView() {
-    $app.innerHTML = '<div class="welcome rise"><div class="brand"><div class="mark">' + LOGO + '</div><h1>QR<b>aura</b></h1><p>Apna QR banao. Sab kuch ek scan mein.</p></div>' +
+    $app.innerHTML = '<div class="welcome rise"><div class="brand"><div class="mark">' + LOGO + '</div><h1>' + esc(BRAND) + '</h1><span class="tag">' + ic("crown", 13) + ' PREMIUM QR VAULT</span><p>Apna QR banao. Sab kuch ek scan mein.</p></div>' +
       '<div class="card" style="padding:18px"><div class="seg"><button id="tnew" type="button" class="on">' + ic("plus") + ' New user</button><button id="told" type="button">' + ic("user") + ' Old user</button></div>' +
       '<form id="sf"><label class="inp">' + ic("user") + '<input id="sn" required maxlength="40" placeholder="Aapka naam" autocomplete="name" aria-label="Aapka naam"></label>' +
       '<label class="inp">' + ic("lock") + '<input type="password" id="sp" required minlength="6" placeholder="Password (kam se kam 6)" autocomplete="new-password" aria-label="Password"></label>' +
@@ -233,7 +234,7 @@
       '<form id="lf2" style="display:none"><label class="inp">' + ic("user") + '<input id="lu" required autocapitalize="off" autocomplete="username" placeholder="Username (jaise neetu4821)" aria-label="Username"></label>' +
       '<label class="inp">' + ic("lock") + '<input type="password" id="lp2" required placeholder="Password" autocomplete="current-password" aria-label="Password"></label><div class="err" id="le"></div><button class="btn block" id="lsub">Login</button></form></div>' +
       '<button class="btn ghost block" id="scan2" style="margin-top:2px">' + ic("scan") + " QR scan karo / upload karo</button>" +
-      '<div class="perks"><span>' + ic("file") + ' PDF 40MB</span><span>' + ic("rupee") + " UPI</span><span>" + ic("lock") + " Password lock</span><span>" + ic("download") + " PNG / SVG</span></div></div>";
+      '<div class="perks"><span>' + ic("file") + ' PDF 40MB</span><span>' + ic("rupee") + " UPI</span><span>" + ic("lock") + " Password lock</span><span>" + ic("download") + ' PNG / SVG</span></div><div class="links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/contact">Contact admin</a></div></div>';
     function tab(isNew) { $("#sf").style.display = isNew ? "" : "none"; $("#lf2").style.display = isNew ? "none" : ""; $("#tnew").className = isNew ? "on" : ""; $("#told").className = isNew ? "" : "on"; }
     $("#tnew").onclick = function () { tab(true); }; $("#told").onclick = function () { tab(false); }; $("#scan2").onclick = openScanner;
     $("#sf").onsubmit = async function (e) {
@@ -313,11 +314,13 @@
       '<div class="stats" id="pst"><div class="stat"><b>–</b><small>QR codes</small></div><div class="stat"><b>–</b><small>Scans</small></div><div class="stat"><b>–</b><small>Locked</small></div></div><div class="sect"><h2>Account</h2></div>' +
       '<div class="group"><button class="lrow" id="pn">' + ic("edit") + ' Naam badlo<span class="sub">' + ic("chev") + '</span></button><button class="lrow" id="pp">' + ic("key") + ' Password badlo<span class="sub">' + ic("chev") + '</span></button><button class="lrow" id="ps">' + ic("scan") + ' QR scan / upload<span class="sub">' + ic("chev") + "</span></button>" +
       (canInstall() || !isStandalone ? '<button class="lrow" id="pi">' + ic("phoneapp") + ' App install karo<span class="sub">' + ic("chev") + "</span></button>" : "") + "</div>" +
+      '<div class="sect"><h2>Help &amp; Info</h2></div><div class="group"><a class="lrow" href="/contact" style="text-decoration:none">' + ic("chat") + ' Contact admin<span class="sub">@' + IG + '</span></a><a class="lrow" href="/terms" style="text-decoration:none">' + ic("file") + ' Terms &amp; Conditions<span class="sub">' + ic("chev") + '</span></a><a class="lrow" href="/privacy" style="text-decoration:none">' + ic("shield") + ' Privacy Policy<span class="sub">' + ic("chev") + '</span></a><button class="lrow" id="psh">' + ic("ext") + ' App share karo<span class="sub">' + ic("chev") + '</span></button></div>' +
       '<div class="group"><button class="lrow red" id="plo">' + ic("logout") + " Logout</button></div>" +
-      '<p class="hint center" style="margin-top:20px">' + ic("shield", 14) + " Aapka data secure hai · QRaura</p>");
+      '<p class="hint center" style="margin-top:20px">' + ic("shield", 14) + " Aapka data secure hai · Qrown</p>");
     $("#cpun").onclick = function () { copyText(userHandle(), "Username copy ho gaya ✅"); };
     $("#pn").onclick = function () { editProfile("name"); }; $("#pp").onclick = function () { editProfile("pass"); }; $("#ps").onclick = openScanner;
-    var pi = $("#pi"); if (pi) pi.onclick = doInstall; $("#plo").onclick = function () { sb.auth.signOut(); };
+    var pi = $("#pi"); if (pi) pi.onclick = doInstall;
+    $("#psh").onclick = async function () { var d = { title: BRAND, text: BRAND + " – apna QR banao, sab kuch ek scan mein 👑", url: location.origin }; if (navigator.share) { try { await navigator.share(d); } catch (e) {} } else copyText(location.origin, "App ka link copy ho gaya ✅"); }; $("#plo").onclick = function () { sb.auth.signOut(); };
     var r = await sb.from("qr_codes").select("scan_count,has_password");
     if (!r.error) $("#pst").innerHTML = '<div class="stat"><b>' + r.data.length + "</b><small>QR codes</small></div><div class=\"stat\"><b>" + r.data.reduce(function (a, q) { return a + q.scan_count; }, 0) + "</b><small>Scans</small></div><div class=\"stat\"><b>" + r.data.filter(function (q) { return q.has_password; }).length + "</b><small>Locked</small></div>";
   }
@@ -450,20 +453,71 @@
       var r = await sb.rpc("qr_scan", { p_slug: slug, p_password: pw });
       if (r.error) { $app.innerHTML = '<div class="view"><div class="card">Error: ' + esc(r.error.message) + "</div></div>"; return; }
       var d = r.data;
-      if (d.status === "not_found") { $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:80px"><div class="mark" style="margin:0 auto 18px;animation:none">' + LOGO + '</div><h1>QR nahi mila</h1><p>Ye QR band kar diya gaya hai ya galat hai.</p></div><div class="foot"><a href="/">QRaura par apna QR banao →</a></div></div>'; return; }
+      if (d.status === "not_found") { $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:80px"><div class="mark" style="margin:0 auto 18px;animation:none">' + LOGO + '</div><h1>QR nahi mila</h1><p>Ye QR band kar diya gaya hai ya galat hai.</p></div><div class="foot"><a href="/">Qrown par apna QR banao →</a></div></div>'; return; }
       if (d.status === "locked" || d.status === "wrong_password") {
         $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:50px"><div class="mark" style="margin:0 auto 18px;animation:none">' + ic("lock", 38).replace("class=\"i\"", 'class="i" style="stroke:#f8e2a0"') + "</div><h1>" + esc(d.title || "Locked QR") + '</h1><p>Ye QR password se locked hai</p></div><form id="lf" class="card"><label class="inp">' + ic("key") + '<input id="lp" type="password" required autofocus placeholder="Password daalo" aria-label="Password"></label><div class="err">' + (d.status === "wrong_password" ? "Galat password" : "") + '</div><button class="btn block">' + ic("lock") + " Unlock karo</button></form></div>";
         $("#lf").onsubmit = function (e) { e.preventDefault(); pw = $("#lp").value; load(); }; return;
       }
-      document.title = d.title + " – " + (CFG.APP_NAME || "QRaura");
-      $app.innerHTML = '<div class="view rise"><div class="vhead"><div class="chip">' + ic("qr", 14) + ' QRAURA</div><h1>' + esc(d.title) + "</h1>" + (d.description ? "<p>" + esc(d.description) + "</p>" : "") + "</div>" + (d.blocks || []).map(renderBlock).join("") + '<div class="foot">Made with <a href="/">QRaura</a> · apna QR banao</div></div>';
+      document.title = d.title + " – " + (CFG.APP_NAME || "Qrown");
+      $app.innerHTML = '<div class="view rise"><div class="vhead"><div class="chip">' + ic("qr", 14) + ' QROWN</div><h1>' + esc(d.title) + "</h1>" + (d.description ? "<p>" + esc(d.description) + "</p>" : "") + "</div>" + (d.blocks || []).map(renderBlock).join("") + '<div class="foot">Made with <a href="/">Qrown</a> · apna QR banao</div><div class="links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer">Report this QR</a></div></div>';
+      var rb = document.querySelector('meta[name=robots]'); if (rb) rb.content = "noindex,nofollow";
     }
     load();
+  }
+
+
+  /* ---------- info pages (public) ---------- */
+  var UPDATED = "8 October 2026";
+  function docPage(title, body) {
+    $app.innerHTML = '<div class="screen noNav rise doc"><div class="topbar"><a class="icon-btn" href="/" aria-label="Home" style="text-decoration:none">' + ic("back") + '</a><h1 style="font-size:17px">' + esc(BRAND) + '</h1><span style="width:44px"></span></div>' + body +
+      '<div class="links"><a href="/">Home</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/contact">Contact</a></div><p class="hint center" style="margin-top:16px">© 2026 ' + esc(BRAND) + '</p></div>';
+    document.title = title + " – " + BRAND; window.scrollTo(0, 0);
+  }
+  function legalView(kind) {
+    if (kind === "terms") return docPage("Terms & Conditions",
+      '<h1>Terms &amp; Conditions</h1><p class="upd">Last updated: ' + UPDATED + '</p>' +
+      '<p>Welcome to ' + BRAND + '. By creating an account or using the app and website you agree to these terms. If you do not agree, please do not use ' + BRAND + '.</p>' +
+      '<h2>1. What ' + BRAND + ' does</h2><p>' + BRAND + ' lets you create QR codes that open a page containing the content you add – text, links, photos, PDFs/documents, phone numbers, UPI IDs and similar details. Anyone who scans the QR (or has its link) can see that content, unless you protect it with a password.</p>' +
+      '<h2>2. Your account</h2><ul><li>You sign up with a name and password. A username is generated for you.</li><li>You are responsible for keeping your username and password safe. Because we do not collect an email address, <b>a lost password cannot be recovered</b>.</li><li>You must be at least 13 years old to use ' + BRAND + '.</li></ul>' +
+      '<h2>3. Your content</h2><p>You own the content you add. You are fully responsible for it and for having the right to share it. You give ' + BRAND + ' permission to store and display it so the service can work.</p>' +
+      '<h2>4. What you must not do</h2><ul><li>Upload or share anything illegal, abusive, hateful, sexually explicit, or that exploits or harms children.</li><li>Run scams, phishing, fake payment requests, malware or misleading links.</li><li>Infringe copyright, trademarks or anyone\'s privacy; impersonate another person or business.</li><li>Upload video or audio files – they are not allowed.</li><li>Abuse, overload, reverse-engineer or attack the service.</li></ul>' +
+      '<div class="note">Do not put highly sensitive details (Aadhaar, card numbers, OTPs, passwords) in a QR unless you use the password lock and fully understand the risk. Content in a QR you share is visible to whoever can open it.</div>' +
+      '<h2>5. Limits</h2><p>Photos up to 15 MB, PDFs/documents up to 40 MB, up to 100 QR codes per account. We may change limits or features at any time.</p>' +
+      '<h2>6. Payments</h2><p>' + BRAND + ' only displays UPI IDs/links you add. We do not process, hold or guarantee any payment. Verify details before paying anyone.</p>' +
+      '<h2>7. Removal and suspension</h2><p>We may remove content, disable QR codes or suspend accounts that break these terms or the law, with or without notice. To report a QR, contact the admin (see Contact).</p>' +
+      '<h2>8. No warranty</h2><p>' + BRAND + ' is provided "as is". We try to keep it available and secure but cannot promise it will always be error-free or uninterrupted, or that content will never be lost.</p>' +
+      '<h2>9. Limitation of liability</h2><p>To the maximum extent allowed by law, ' + BRAND + ' and its admin are not liable for indirect or consequential losses, or for content created by users.</p>' +
+      '<h2>10. Changes</h2><p>We may update these terms. Continuing to use ' + BRAND + ' after changes means you accept them.</p>' +
+      '<h2>11. Contact</h2><p>Questions? Message the admin on Instagram <a href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer">@' + IG + '</a>.</p>');
+    if (kind === "privacy") return docPage("Privacy Policy",
+      '<h1>Privacy Policy</h1><p class="upd">Last updated: ' + UPDATED + '</p>' +
+      '<p>Your privacy matters. This policy explains what ' + BRAND + ' collects and how it is used.</p>' +
+      '<h2>1. What we collect</h2><ul><li><b>Account:</b> the name you enter, an auto-generated username, and your password (stored only as a secure hash – we cannot read it). We do not ask for your email or phone number to sign up.</li><li><b>Content you add:</b> text, links, photos, PDFs/documents, phone numbers, UPI IDs, locations and other details you put in a QR, plus QR settings such as colours and password lock.</li><li><b>Usage counts:</b> how many times each QR was opened and when it was last opened. We do not record who scanned it.</li><li><b>Technical data:</b> our hosting and database providers may keep standard server logs (such as IP address and device/browser type) for security and reliability.</li></ul>' +
+      '<h2>2. Who can see your content</h2><p>Content inside a QR is <b>public to anyone who has the QR or its link</b>, unless you enable the password lock. Uploaded photos and files have web addresses that can be opened by anyone who knows the address. Only add what you are comfortable sharing.</p>' +
+      '<h2>3. Camera and scanning</h2><p>The scanner uses your camera only while it is open, and scanning happens on your device. Photos you pick to read a QR are processed on your device and are not uploaded. On some browsers a small open-source decoding script may be loaded from a public CDN.</p>' +
+      '<h2>4. How we use data</h2><p>Only to run the service: show your QR content, let you log in, count scans, keep the service secure and prevent abuse. We do not sell your data and we do not show ads.</p>' +
+      '<h2>5. Service providers</h2><p>' + BRAND + ' uses Supabase (login, database and file storage), Cloudflare (hosting) and GitHub (code). They process data on our behalf under their own privacy policies.</p>' +
+      '<h2>6. Storage on your device</h2><p>Your login session is stored in your browser (local storage) so you stay signed in. The app may cache its own files to work like an installed app.</p>' +
+      '<h2>7. Your choices</h2><ul><li>You can edit or delete any QR and its uploaded files at any time from the app.</li><li>You can change your name and password in Profile.</li><li>To delete your whole account and data, message the admin on Instagram <a href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer">@' + IG + '</a>.</li></ul>' +
+      '<h2>8. Children</h2><p>' + BRAND + ' is not meant for children under 13.</p>' +
+      '<h2>9. Changes</h2><p>We may update this policy and will change the date above when we do.</p>' +
+      '<h2>10. Contact</h2><p>Privacy questions: Instagram <a href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer">@' + IG + '</a>.</p>');
+    var faq = [["Password bhool gaya, kya karun?", "Hum email nahi lete, isliye password recover nahi hota. Admin se Instagram par sampark karo – naya account banana pad sakta hai."],
+      ["Kya video upload ho sakta hai?", "Nahi. Sirf photos (15MB tak), PDF/documents (40MB tak), text, links, numbers, UPI aadi save hote hain."],
+      ["Mera QR scan nahi ho raha?", "QR ka rang dark aur background light rakho, aur print saaf aur bada rakho. Camera ko seedha rakho."],
+      ["QR ka naam badal sakte hain? Link badlega kya?", "Haan, naam kabhi bhi badlo. QR ka link aur printed QR wahi rehta hai."],
+      ["Kisi galat ya spam QR ki report kaise karun?", "Admin ko Instagram par QR ka link bhejo. Hum check karke hata denge."]];
+    return docPage("Contact Admin",
+      '<h1>Contact Admin</h1><p class="upd">Help, report ya feedback – seedha admin se baat karo.</p>' +
+      '<a class="contact" href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer"><span class="ci">' + ic("chat", 26) + '</span><span><b>@' + IG + '</b><small>Instagram par DM karo · Admin</small></span></a>' +
+      '<div class="note">Report karte waqt QR ka link (jaise ' + esc(location.origin) + '/s/abc123) zaroor bhejo.</div>' +
+      '<h2>FAQ</h2>' + faq.map(function (f) { return '<details class="faq"><summary>' + esc(f[0]) + "</summary><p>" + esc(f[1]) + "</p></details>"; }).join(""));
   }
 
   /* ---------- router ---------- */
   async function route() {
     closeSheet();
+    var lg = location.pathname.match(/^\/(terms|privacy|contact)\/?$/); if (lg) return legalView(lg[1]);
     var m = location.pathname.match(/^\/s\/([a-z0-9]+)\/?$/i); if (m) return viewer(m[1].toLowerCase());
     if (!session) return authView();
     var h = location.hash || "#/";
@@ -477,7 +531,7 @@
   (async function init() {
     if (!configured()) return setupScreen();
     sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-    if (/^\/s\//.test(location.pathname)) return route();
+    if (/^\/(s\/|terms|privacy|contact)/.test(location.pathname)) return route();
     var s = await sb.auth.getSession(); session = s.data.session;
     sb.auth.onAuthStateChange(function (ev, sess) { var had = !!session; session = sess; if (had !== !!sess) route(); });
     window.addEventListener("hashchange", route); route();
