@@ -288,7 +288,7 @@
 
   /* ---------- welcome / auth ---------- */
   function authView() {
-    $app.innerHTML = '<div class="welcome rise"><div class="brand"><div class="mark">' + LOGO + '</div><h1>' + esc(BRAND) + '</h1><span class="tag">' + ic("crown", 13) + ' PREMIUM QR VAULT</span><div style="margin-top:10px;font-size:12px;letter-spacing:.18em;color:var(--faint)">BY RATHOD HUB</div><p>Apna QR banao. Sab kuch ek scan mein.</p></div>' +
+    $app.innerHTML = '<div class="welcome rise"><div class="brand"><div class="mark">' + LOGO + '</div><h1>' + esc(BRAND) + '</h1><span class="tag">' + ic("crown", 13) + ' PREMIUM QR VAULT</span><div style="margin-top:10px;font-size:12px;letter-spacing:.18em;color:var(--faint)">BY RATHOD</div><p>Apna QR banao. Sab kuch ek scan mein.</p></div>' +
       '<div class="card" style="padding:18px"><div class="seg"><button id="tnew" type="button" class="on">' + ic("plus") + ' New user</button><button id="told" type="button">' + ic("user") + ' Old user</button></div>' +
       '<form id="sf"><label class="inp">' + ic("user") + '<input id="sn" required maxlength="40" placeholder="Aapka naam" autocomplete="name" aria-label="Aapka naam"></label>' +
       '<label class="inp">' + ic("lock") + '<input type="password" id="sp" required minlength="6" placeholder="Password (kam se kam 6)" autocomplete="new-password" aria-label="Password"></label>' +
