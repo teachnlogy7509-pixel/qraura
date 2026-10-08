@@ -52,6 +52,8 @@
     phoneapp: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
     ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     power: '<path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/>',
+    wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.2" r="1"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/>'
   };
   function ic(n, size) { return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"' + (size ? ' style="font-size:' + size + 'px"' : "") + ">" + (IC[n] || "") + "</svg>"; }
@@ -63,7 +65,7 @@
   function safeStyle(st) {
     st = st || {}; var fg = st.fg || "#111111", bg = st.bg || "#ffffff", L1 = lum(fg), L2 = lum(bg);
     if (L1 >= L2 || (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05) < 4) { fg = "#111111"; if (lum(bg) < 0.35) bg = "#ffffff"; }
-    return { fg: fg, bg: bg, shape: st.shape };
+    return { fg: fg, bg: bg, shape: st.shape, logo: st.logo || "", frame: st.frame || "", ch: st.ch || "Q" };
   }
   function qrCanvas(text, style, px) {
     style = safeStyle(style); px = px || 1024;
@@ -73,28 +75,84 @@
     var shape = style.shape || "square";
     for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) {
       if (!m[r][c]) continue; var x = (c + margin) * s, y = (r + margin) * s;
-      if (shape === "dots" && !inFinder(r, c, n)) { g.beginPath(); g.arc(x + s / 2, y + s / 2, s * 0.46, 0, 6.2832); g.fill(); }
-      else if (shape === "rounded") { g.beginPath(); if (g.roundRect) g.roundRect(x, y, s + 0.5, s + 0.5, s * 0.35); else g.rect(x, y, s + 0.5, s + 0.5); g.fill(); }
+      if (shape === "dots" && !inFinder(r, c, n)) { g.beginPath(); g.arc(x + s / 2, y + s / 2, s * 0.5, 0, 6.2832); g.fill(); }
+      else if (shape === "rounded") { var u = r > 0 && m[r - 1][c], dn = r < n - 1 && m[r + 1][c], lf = c > 0 && m[r][c - 1], rt = c < n - 1 && m[r][c + 1], R = s * 0.42, w = s + 0.5;
+        var tl = !u && !lf ? R : 0, tr = !u && !rt ? R : 0, br = !dn && !rt ? R : 0, bl = !dn && !lf ? R : 0;
+        g.beginPath(); g.moveTo(x + tl, y); g.lineTo(x + w - tr, y); if (tr) g.arcTo(x + w, y, x + w, y + tr, tr); else g.lineTo(x + w, y);
+        g.lineTo(x + w, y + w - br); if (br) g.arcTo(x + w, y + w, x + w - br, y + w, br); else g.lineTo(x + w, y + w);
+        g.lineTo(x + bl, y + w); if (bl) g.arcTo(x, y + w, x, y + w - bl, bl); else g.lineTo(x, y + w);
+        g.lineTo(x, y + tl); if (tl) g.arcTo(x, y, x + tl, y, tl); else g.lineTo(x, y); g.closePath(); g.fill(); }
       else g.fillRect(x, y, s + 0.5, s + 0.5);
     }
+    if (style.logo === "crown" || style.logo === "letter") {
+      var ls = px * 0.24, cx = px / 2, pad = ls * 0.1;
+      g.fillStyle = style.bg; rr(g, cx - ls / 2 - pad, cx - ls / 2 - pad, ls + pad * 2, ls + pad * 2, ls * 0.28); g.fill();
+      g.fillStyle = style.fg; g.beginPath(); g.arc(cx, cx, ls * 0.46, 0, 6.2832); g.fill();
+      g.fillStyle = style.bg;
+      if (style.logo === "crown") { g.save(); var k = ls * 0.5 / 24; g.translate(cx - 12 * k, cx - 11.5 * k); g.scale(k, k); g.fill(new Path2D("M3 8l4 4 5-7 5 7 4-4-2 11H5z")); g.restore(); }
+      else { g.font = "800 " + Math.round(ls * 0.56) + "px Inter,Arial,sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(style.ch, cx, cx + ls * 0.03); }
+    }
     return cv;
+  }
+  function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function qrFramed(text, style, px) {
+    var st = safeStyle(style), cv = qrCanvas(text, style, px), ft = String(st.frame || "").trim().slice(0, 16); if (!ft) return cv;
+    var bh = Math.round(px * 0.17), o = document.createElement("canvas"); o.width = px; o.height = px + bh; var g = o.getContext("2d");
+    g.fillStyle = st.bg; g.fillRect(0, 0, o.width, o.height); g.drawImage(cv, 0, 0);
+    var ph = bh * 0.62, pw = Math.min(px * 0.8, Math.max(px * 0.4, ft.length * ph * 0.42 + ph * 1.4)), x = (px - pw) / 2, y = px + (bh - ph) / 2 - bh * 0.14;
+    g.fillStyle = st.fg; rr(g, x, y, pw, ph, ph / 2); g.fill();
+    g.fillStyle = st.bg; g.font = "800 " + Math.round(ph * 0.46) + "px Inter,Arial,sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(ft.toUpperCase(), px / 2, y + ph / 2 + 1);
+    return o;
   }
   function qrSvg(text, style) {
     style = safeStyle(style); var m = makeModules(text), n = m.length, margin = 4, total = n + margin * 2, shape = style.shape || "square", d = [];
     var out = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + total + " " + total + '" shape-rendering="' + (shape === "square" ? "crispEdges" : "geometricPrecision") + '"><rect width="100%" height="100%" fill="' + esc(style.bg || "#ffffff") + '"/><g fill="' + esc(style.fg || "#111111") + '">';
     for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) {
       if (!m[r][c]) continue; var x = c + margin, y = r + margin;
-      if (shape === "dots" && !inFinder(r, c, n)) out += '<circle cx="' + (x + 0.5) + '" cy="' + (y + 0.5) + '" r="0.46"/>';
-      else if (shape === "rounded") out += '<rect x="' + x + '" y="' + y + '" width="1.02" height="1.02" rx="0.35"/>';
+      if (shape === "dots" && !inFinder(r, c, n)) out += '<circle cx="' + (x + 0.5) + '" cy="' + (y + 0.5) + '" r="0.5"/>';
+      else if (shape === "rounded") { var u = r > 0 && m[r - 1][c], dn = r < n - 1 && m[r + 1][c], lf = c > 0 && m[r][c - 1], rt = c < n - 1 && m[r][c + 1], R = 0.42, w = 1.02;
+        var tl = !u && !lf ? R : 0, tr = !u && !rt ? R : 0, br = !dn && !rt ? R : 0, bl = !dn && !lf ? R : 0;
+        d.push("M" + (x + tl) + " " + y + "H" + (x + w - tr) + (tr ? "A" + tr + " " + tr + " 0 0 1 " + (x + w) + " " + (y + tr) : "") + "V" + (y + w - br) + (br ? "A" + br + " " + br + " 0 0 1 " + (x + w - br) + " " + (y + w) : "") + "H" + (x + bl) + (bl ? "A" + bl + " " + bl + " 0 0 1 " + x + " " + (y + w - bl) : "") + "V" + (y + tl) + (tl ? "A" + tl + " " + tl + " 0 0 1 " + (x + tl) + " " + y : "") + "Z"); }
       else d.push("M" + x + " " + y + "h1v1h-1z");
     }
     if (d.length) out += '<path d="' + d.join("") + '"/>';
-    return out + "</g></svg>";
+    out += "</g>";
+    if (style.logo === "crown" || style.logo === "letter") {
+      var ls = total * 0.24, c = total / 2, k = ls * 0.5 / 24;
+      out += '<rect x="' + (c - ls * 0.6) + '" y="' + (c - ls * 0.6) + '" width="' + ls * 1.2 + '" height="' + ls * 1.2 + '" rx="' + ls * 0.3 + '" fill="' + esc(style.bg) + '"/><circle cx="' + c + '" cy="' + c + '" r="' + ls * 0.46 + '" fill="' + esc(style.fg) + '"/>';
+      out += style.logo === "crown" ? '<path transform="translate(' + (c - 12 * k) + " " + (c - 11.5 * k) + ") scale(" + k + ')" fill="' + esc(style.bg) + '" d="M3 8l4 4 5-7 5 7 4-4-2 11H5z"/>' : '<text x="' + c + '" y="' + (c + ls * 0.2) + '" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="' + ls * 0.56 + '" fill="' + esc(style.bg) + '">' + esc(style.ch) + "</text>";
+    }
+    var ft = String(style.frame || "").trim().slice(0, 16);
+    if (ft) {
+      var bh = total * 0.17, ph = bh * 0.62, pw = Math.min(total * 0.8, Math.max(total * 0.4, ft.length * ph * 0.42 + ph * 1.4));
+      out = out.replace('viewBox="0 0 ' + total + " " + total + '"', 'viewBox="0 0 ' + total + " " + (total + bh) + '"').replace('<rect width="100%" height="100%"', '<rect width="100%" height="100%"');
+      out += '<rect y="' + total + '" width="' + total + '" height="' + bh + '" fill="' + esc(style.bg) + '"/><rect x="' + (total - pw) / 2 + '" y="' + (total + (bh - ph) / 2 - bh * 0.14) + '" width="' + pw + '" height="' + ph + '" rx="' + ph / 2 + '" fill="' + esc(style.fg) + '"/><text x="' + total / 2 + '" y="' + (total + (bh - ph) / 2 - bh * 0.14 + ph * 0.66) + '" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="' + ph * 0.46 + '" fill="' + esc(style.bg) + '">' + esc(ft.toUpperCase()) + "</text>";
+    }
+    return out + "</svg>";
   }
-  function paint(canvas, text, style, px) { var cv = qrCanvas(text, style, px); canvas.width = canvas.height = px; canvas.getContext("2d").drawImage(cv, 0, 0); }
+  function paint(canvas, text, style, px, plain) { var cv = plain ? qrCanvas(text, style, px) : qrFramed(text, style, px); canvas.width = cv.width; canvas.height = cv.height; canvas.getContext("2d").drawImage(cv, 0, 0); }
   function download(blob, name) { var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000); }
   function fname(t) { return (String(t || "qr").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "qr"); }
-  function dlPng(q) { qrCanvas(shareUrl(q.slug), q.style, 1024).toBlob(function (b) { download(b, fname(q.title) + ".png"); }, "image/png"); }
+  function dlPng(q) { qrFramed(shareUrl(q.slug), q.style, 1024).toBlob(function (b) { download(b, fname(q.title) + ".png"); }, "image/png"); }
+  function wrapText(g, t, x, y, maxW, lh, maxLines) {
+    var words = String(t || "").split(/\s+/), line = "", n = 0;
+    for (var i = 0; i < words.length; i++) { var test = line ? line + " " + words[i] : words[i]; if (g.measureText(test).width > maxW && line) { g.fillText(line, x, y); y += lh; line = words[i]; if (++n >= maxLines) return y; } else line = test; }
+    if (line) { g.fillText(line, x, y); y += lh; } return y;
+  }
+  function dlPoster(q) {
+    var W = 1080, H = 1500, cv = document.createElement("canvas"); cv.width = W; cv.height = H; var g = cv.getContext("2d");
+    var gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, "#0b0a10"); gr.addColorStop(1, "#1a0b10"); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "#dcaa48"; g.lineWidth = 6; rr(g, 36, 36, W - 72, H - 72, 48); g.stroke();
+    g.textAlign = "center"; g.fillStyle = "#e8c15c"; g.font = "700 34px Arial,sans-serif"; g.fillText("Q R O W N", W / 2, 120);
+    g.fillStyle = "#fff"; g.font = "800 72px Arial,sans-serif"; var y = wrapText(g, q.title, W / 2, 230, 860, 84, 2);
+    if (q.description) { g.fillStyle = "#b9b3c4"; g.font = "400 36px Arial,sans-serif"; y = wrapText(g, q.description, W / 2, y + 6, 840, 48, 2); }
+    var qs = 760, qc = qrFramed(shareUrl(q.slug), q.style, 1024), qh = qs * qc.height / qc.width, qy = Math.max(y + 20, 380);
+    g.fillStyle = "#fff"; rr(g, (W - qs) / 2 - 26, qy - 26, qs + 52, qh + 52, 40); g.fill(); g.drawImage(qc, (W - qs) / 2, qy, qs, qh);
+    var by = qy + qh + 110; g.fillStyle = "#e8c15c"; g.font = "800 64px Arial,sans-serif"; g.fillText("SCAN KARO", W / 2, by);
+    g.fillStyle = "#b9b3c4"; g.font = "400 34px Arial,sans-serif"; g.fillText("Camera se scan karo – sab kuch dikh jayega", W / 2, by + 58);
+    g.fillStyle = "#6f6a7d"; g.font = "400 28px Arial,sans-serif"; g.fillText("Made with Qrown by Rathod", W / 2, H - 80);
+    cv.toBlob(function (b) { download(b, fname(q.title) + "-poster.png"); }, "image/png");
+  }
   function dlSvg(q) { download(new Blob([qrSvg(shareUrl(q.slug), q.style)], { type: "image/svg+xml" }), fname(q.title) + ".svg"); }
   function lum(hex) { var h = String(hex).replace("#", ""); if (h.length === 3) h = h.replace(/./g, "$&$&"); var v = [0, 2, 4].map(function (i) { var c = parseInt(h.substr(i, 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; }
 
@@ -109,15 +167,27 @@
     whatsapp: { icon: "chat",  name: "WhatsApp", fields: [["label", "Naam", "text"], ["value", "Number country code ke saath (919876543210)", "text"], ["extra", "Pehle se likha message (optional)", "text"]] },
     email:    { icon: "mail",  name: "Email", fields: [["label", "Naam", "text"], ["value", "Email address", "text"]] },
     location: { icon: "pin",   name: "Location", fields: [["label", "Jagah ka naam", "text"], ["value", "Address ya Google Maps link", "text"]] },
+    contact:  { icon: "user",  name: "Contact card (Save)", fields: [["label", "Poora naam", "text"], ["value", "Phone number", "text"], ["extra", "Email (optional)", "text"]] },
+    wifi:     { icon: "wifi",  name: "Wi-Fi", fields: [["label", "Wi-Fi naam (SSID)", "text"], ["value", "Wi-Fi password (open ho to khali)", "text"]] },
     upi:      { icon: "rupee", name: "UPI payment", fields: [["label", "Payee ka naam", "text"], ["value", "UPI ID (name@bank)", "text"]] }
   };
-  function newBlock(type) { return { id: uid(), type: type, label: "", value: "", extra: "", url: "", path: "" }; }
+  function newBlock(type, label) { return { id: uid(), type: type, label: label || "", value: "", extra: "", url: "", path: "" }; }
+  var TPLS = {
+    card: { n: "💼 Visiting Card", t: "Mera Visiting Card", d: "Mujhse milne ke liye shukriya!", b: [["contact", "Aapka naam"], ["whatsapp", "WhatsApp"], ["email", "Email"], ["link", "Website"], ["location", "Office"]] },
+    shop: { n: "🏪 Dukaan / Menu", t: "Meri Dukaan", d: "Menu, location aur payment", b: [["text", "Aaj ka offer"], ["phone", "Call karo"], ["location", "Dukaan ka pata"], ["upi", "Dukaan ka naam"], ["whatsapp", "Order on WhatsApp"]] },
+    pay: { n: "💸 UPI Payment", t: "Payment karo", d: "UPI se seedha pay karo", b: [["upi", "Aapka naam"], ["detail", "Account No"], ["detail", "IFSC"]] },
+    wifi: { n: "📶 Guest Wi-Fi", t: "Guest Wi-Fi", d: "Connect karne ke liye scan karo", b: [["wifi", "Wi-Fi naam"], ["text", "Rules"]] },
+    event: { n: "🎉 Event Invite", t: "Aap aamantrit hain!", d: "Hamare event mein zaroor aana", b: [["text", "Event ki details"], ["location", "Venue"], ["phone", "Contact"], ["link", "RSVP link"]] }
+  };
 
   function action(href, icon, title, sub, external) { return '<a class="vb" ' + (external ? 'target="_blank" rel="noopener noreferrer" ' : "") + 'href="' + esc(href) + '"><span class="vi">' + ic(icon) + '</span><span class="vt"><b>' + esc(title) + "</b>" + (sub ? "<small>" + esc(sub) + "</small>" : "") + '</span><span class="vch">' + ic("chev") + "</span></a>"; }
   function card(icon, inner) { return '<div class="vb"><span class="vi">' + ic(icon) + '</span><span class="vt">' + inner + "</span></div>"; }
   function linkify(t) { return esc(t).replace(/(https?:\/\/[^\s<]+)/g, function (m) { var tail = ""; var x = m.match(/(?:[.,;:!?)]|&quot;|&#39;)+$/); if (x) { tail = x[0]; m = m.slice(0, -tail.length); } return '<a href="' + m + '" target="_blank" rel="noopener noreferrer">' + m + "</a>" + tail; }); }
   function dlUrl(u, name) { return u + (u.indexOf("?") < 0 ? "?" : "&") + "download=" + encodeURIComponent(name || "file"); }
   function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return u; } }
+  function wifiStr(ssid, pw) { var e = function (x) { return String(x || "").replace(/([\\;,:"])/g, "\\$1"); }; return "WIFI:T:" + (pw ? "WPA" : "nopass") + ";S:" + e(ssid) + ";" + (pw ? "P:" + e(pw) + ";" : "") + ";"; }
+  function devType() { var u = navigator.userAgent; return /ipad|tablet/i.test(u) ? "tablet" : /mobi|android|iphone/i.test(u) ? "mobile" : "desktop"; }
+  function vcf(n, t, e) { var c = function (x) { return String(x || "").replace(/[\r\n]+/g, " ").replace(/([,;\\])/g, "\\$1"); }; return "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:" + c(n) + "\r\nN:;" + c(n) + ";;;\r\nTEL;TYPE=CELL:" + c(t) + "\r\n" + (e ? "EMAIL:" + c(e) + "\r\n" : "") + "END:VCARD\r\n"; }
   function renderBlock(b) {
     var T = TYPES[b.type]; if (!T) return ""; var v = b.value || "";
     switch (b.type) {
@@ -132,6 +202,8 @@
       case "location": { var isU = /^https?:\/\//i.test(v), lu = isU ? v : "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(v);
         return '<div class="vb col locc"><a class="frow" style="color:inherit;text-decoration:none" target="_blank" rel="noopener noreferrer" href="' + esc(lu) + '"><span class="vi">' + ic("pin") + '</span><span class="vt"><b>' + esc(b.label || (isU ? "Location" : v)) + "</b><small>" + esc(b.label && !isU ? v : "Maps mein kholo") + '</small></span><span class="vch">' + ic("chev") + "</span></a>" +
           (isU ? "" : '<iframe class="map" loading="lazy" referrerpolicy="no-referrer" title="Map" src="https://maps.google.com/maps?q=' + encodeURIComponent(v) + '&output=embed&z=15"></iframe>') + "</div>"; }
+      case "contact": return '<div class="vb col"><div class="frow"><span class="vi">' + ic("user") + '</span><span class="vt"><b>' + esc(b.label || "Contact") + "</b><small>" + esc(v) + (b.extra ? " · " + esc(b.extra) : "") + '</small></span></div><div class="row2"><button class="btn sm" data-vcf data-n="' + esc(b.label || "") + '" data-t="' + esc(v) + '" data-e="' + esc(b.extra || "") + '">' + ic("download") + ' Save contact</button>' + (digits(v) ? '<a class="btn sm ghost" href="tel:' + esc(digits(v)) + '">' + ic("phone") + " Call</a>" : "") + "</div></div>";
+      case "wifi": return '<div class="vb col"><div class="frow"><span class="vi">' + ic("wifi") + '</span><span class="vt"><small>Wi-Fi</small><b>' + esc(b.label || "Wi-Fi") + "</b>" + (v ? "<small>Password: " + esc(v) + "</small>" : "<small>Open network</small>") + '</span>' + (v ? '<button class="btn sm ghost" data-copy="' + esc(v) + '" aria-label="Copy">' + ic("copy") + "</button>" : "") + '</div><canvas class="wq" data-wifi="' + esc(wifiStr(b.label, v)) + '"></canvas><p class="hint center" style="margin:8px 0 0">Dusre phone se is QR ko scan karke seedha connect karo</p></div>';
       case "upi": return '<div class="vb col"><a class="frow" style="color:inherit;text-decoration:none" href="upi://pay?pa=' + encodeURIComponent(v) + "&pn=" + encodeURIComponent(b.label || "") + '"><span class="vi">' + ic("rupee") + '</span><span class="vt"><b>Pay ' + esc(b.label || "") + "</b><small>" + esc(v) + '</small></span><span class="vch">' + ic("chev") + '</span></a><button class="btn sm ghost block" style="margin-top:10px" data-copy="' + esc(v) + '">' + ic("copy") + " UPI ID copy karo</button></div>";
     }
     return "";
@@ -147,6 +219,8 @@
     $$("img[data-zoom]").forEach(function (im) { var ph = im.parentNode, done = function () { ph.classList.remove("sk"); }; if (im.complete) done(); else { im.onload = done; im.onerror = function () { ph.classList.remove("sk"); ph.innerHTML = '<div class="cap" style="padding:20px;text-align:center">Photo load nahi hui</div>'; }; } im.onclick = function () { lightbox(im.getAttribute("data-zoom"), im.getAttribute("data-cap")); }; });
     $$("[data-view]").forEach(function (b) { b.onclick = function () { lightbox(b.getAttribute("data-view"), b.getAttribute("data-cap")); }; });
     $$(".view > .vb, .view > .shr").forEach(function (e, i) { e.style.animation = "rise .5s both"; e.style.animationDelay = Math.min(i, 12) * 70 + "ms"; });
+    $$("[data-vcf]").forEach(function (b) { b.onclick = function () { download(new Blob([vcf(b.getAttribute("data-n"), b.getAttribute("data-t"), b.getAttribute("data-e"))], { type: "text/vcard" }), fname(b.getAttribute("data-n") || "contact") + ".vcf"); toast("Contact file download ho gayi ✅"); }; });
+    $$("canvas.wq").forEach(function (c) { try { paint(c, c.getAttribute("data-wifi"), { fg: "#111111", bg: "#ffffff", shape: "square" }, 360, true); } catch (e) {} });
     var sh = $("#vshare"); if (sh) sh.onclick = function () { var d = { title: document.title, url: location.href }; if (navigator.share) navigator.share(d).catch(function () {}); else copyText(location.href, "Link copy ho gaya ✅"); };
     var cl = $("#vcopy"); if (cl) cl.onclick = function () { copyText(location.href, "Link copy ho gaya ✅"); };
   }
@@ -319,7 +393,7 @@
   }
 
   /* ---------- home ---------- */
-  var COLS = "id,owner,slug,title,description,blocks,style,has_password,is_active,public_index,scan_count,last_scanned_at,created_at,updated_at";
+  var COLS = "id,owner,slug,title,description,blocks,style,has_password,is_active,public_index,expires_at,max_scans,scan_count,last_scanned_at,created_at,updated_at";
   var cache = [];
   async function home() {
     var nu = sessionStorage.getItem("qr_new_username");
@@ -339,16 +413,17 @@
     $("#cnt").textContent = cache.length ? cache.length + " total" : "";
     if (!cache.length) { $("#list").innerHTML = '<div class="empty"><div class="em">' + ic("qr") + '</div><b style="color:var(--txt);font-size:17px">Abhi koi QR nahi hai</b><p style="margin:6px 0 16px">Pehla QR banao aur scan karke dekho.</p><button class="btn" id="e1">' + ic("plus") + " Pehla QR banao</button></div>"; $("#e1").onclick = function () { location.hash = "#/new"; }; return; }
     $("#list").innerHTML = cache.map(function (q) {
-      return '<button class="qi" data-id="' + q.id + '"><canvas></canvas><span class="m"><b>' + esc(q.title) + '</b><span class="meta"><span>' + ic("eye", 14) + " " + q.scan_count + "</span><span>" + ic("file", 14) + " " + q.blocks.length + "</span>" + (q.has_password ? "<span>" + ic("lock", 14) + " Locked</span>" : "") + (q.public_index ? "<span>" + ic("link", 14) + " Google</span>" : "") + '<span><i class="dot' + (q.is_active ? "" : " off") + '"></i> ' + (q.is_active ? "Active" : "Off") + '</span></span></span><span class="go">' + ic("chev") + "</span></button>";
+      return '<button class="qi" data-id="' + q.id + '"><canvas></canvas><span class="m"><b>' + esc(q.title) + '</b><span class="meta"><span>' + ic("eye", 14) + " " + q.scan_count + "</span><span>" + ic("file", 14) + " " + q.blocks.length + "</span>" + (q.has_password ? "<span>" + ic("lock", 14) + " Locked</span>" : "") + (q.public_index ? "<span>" + ic("link", 14) + " Google</span>" : "") + ((q.expires_at && new Date(q.expires_at) < new Date()) || (q.max_scans && q.scan_count >= q.max_scans) ? "<span>⏳ Expired</span>" : q.max_scans || q.expires_at ? "<span>⏳ Limit</span>" : "") + '<span><i class="dot' + (q.is_active ? "" : " off") + '"></i> ' + (q.is_active ? "Active" : "Off") + '</span></span></span><span class="go">' + ic("chev") + "</span></button>";
     }).join("");
     $$(".qi").forEach(function (el) {
       var q = cache.filter(function (x) { return x.id === el.getAttribute("data-id"); })[0];
-      paint($("canvas", el), shareUrl(q.slug), q.style, 192); el.onclick = function () { qrSheet(q); };
+      paint($("canvas", el), shareUrl(q.slug), q.style, 192, true); el.onclick = function () { qrSheet(q); };
     });
   }
   function qrSheet(q) {
     sheet('<h2>' + esc(q.title) + '</h2><canvas class="bigqr"></canvas><div class="linkpill">' + ic("link", 15) + " " + esc(shareUrl(q.slug)) + '</div>' +
       '<div class="row nw" style="margin-bottom:12px"><button class="btn grow" data-a="png">' + ic("download") + ' PNG</button><button class="btn line grow" data-a="svg">' + ic("download") + ' SVG</button><button class="btn ghost grow" data-a="copy">' + ic("copy") + " Link</button></div>" +
+      '<div class="row nw" style="margin-bottom:12px"><button class="btn ghost grow" data-a="poster">' + ic("image") + ' Poster</button><button class="btn ghost grow" data-a="stats">' + ic("chart") + " Analytics</button></div>" +
       '<button class="lrow" data-a="open">' + ic("ext") + ' Page kholo<span class="sub">scan jaisa dikhega</span></button><button class="lrow" data-a="edit">' + ic("edit") + ' Edit karo</button><button class="lrow" data-a="rename">' + ic("text") + ' Naam badlo</button>' +
       '<div class="lrow" style="cursor:default">' + ic("power") + 'QR active<span class="sub"><label class="sw" style="min-height:0"><input type="checkbox" id="actsw"' + (q.is_active ? " checked" : "") + '></label></span></div><button class="lrow red" data-a="del">' + ic("trash") + " Delete karo</button>",
       function (sh) {
@@ -356,13 +431,24 @@
         $("#actsw", sh).onchange = async function (e) { var on = e.target.checked; var rr = await save_(q, { p_active: on }); if (rr.error) { toast(rr.error.message); e.target.checked = !on; } else { q.is_active = on; toast(on ? "QR active ✅" : "QR band kar diya"); } };
         sh.onclick = async function (e) {
           var b = e.target.closest("[data-a]"); if (!b) return; var a = b.getAttribute("data-a");
-          if (a === "png") dlPng(q); else if (a === "svg") dlSvg(q); else if (a === "copy") copyText(shareUrl(q.slug), "Link copy ho gaya ✅");
+          if (a === "png") dlPng(q); else if (a === "svg") dlSvg(q); else if (a === "copy") copyText(shareUrl(q.slug), "Link copy ho gaya ✅"); else if (a === "poster") dlPoster(q); else if (a === "stats") statsSheet(q);
           else if (a === "open") window.open(shareUrl(q.slug), "_blank");
           else if (a === "edit") { closeSheet(); location.hash = "#/edit/" + q.id; }
           else if (a === "rename") { var nn = prompt("Naya naam:", q.title); if (nn === null || !nn.trim()) return; var rr = await save_(q, { p_title: nn.trim() }); if (rr.error) toast(rr.error.message); else { toast("Naam badal gaya ✅"); closeSheet(); home(); } }
           else if (a === "del") { if (!confirm("Ye QR delete karna hai? Print kiya hua QR kaam karna band kar dega.")) return; var d = await sb.from("qr_codes").delete().eq("id", q.id); if (d.error) toast(d.error.message); else { var ps = (q.blocks || []).map(function (x) { return x.path; }).filter(Boolean); if (ps.length) sb.storage.from("qr-files").remove(ps); closeSheet(); toast("Delete ho gaya"); home(); } }
         };
       });
+  }
+  async function statsSheet(q) {
+    sheet("<h2>Analytics</h2><p class=\"hint center\">" + esc(q.title) + '</p><div class="loading" style="min-height:120px"><div class="spin"></div></div>');
+    var r = await sb.rpc("qr_stats", { p_id: q.id });
+    if (r.error) { sheet("<h2>Analytics</h2><p class=\"hint center\">" + esc(r.error.message) + "</p>"); return; }
+    var d = r.data, days = d.days || [], mx = Math.max(1, Math.max.apply(null, days.map(function (x) { return x.n; }))), dv = d.dev || {}, tot = Math.max(1, Object.keys(dv).reduce(function (a, k) { return a + dv[k]; }, 0));
+    var names = { mobile: "📱 Mobile", desktop: "💻 Desktop", tablet: "📟 Tablet", other: "Other" };
+    var last = d.last ? new Date(d.last).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+    sheet("<h2>Analytics</h2><p class=\"hint center\">" + esc(q.title) + '</p><div class="an3"><div><b>' + (d.total || 0) + "</b><span>Total scans</span></div><div><b>" + (d.today || 0) + "</b><span>Aaj</span></div><div><b>" + last + "</b><span>Last scan</span></div></div>" +
+      '<h3 class="anh">Pichhle 14 din</h3><div class="bars">' + days.map(function (x) { return '<div class="bar" title="' + x.d + ": " + x.n + '"><i style="height:' + Math.max(4, Math.round(x.n / mx * 100)) + '%"></i><small>' + (+x.d.slice(8)) + "</small></div>"; }).join("") + "</div>" +
+      '<h3 class="anh">Device</h3>' + (Object.keys(dv).length ? Object.keys(dv).map(function (k) { return '<div class="dvr"><span>' + (names[k] || k) + '</span><div class="dvb"><i style="width:' + Math.round(dv[k] / tot * 100) + '%"></i></div><b>' + dv[k] + "</b></div>"; }).join("") : '<p class="hint">Abhi koi scan nahi hua.</p>') + '<p class="hint center" style="margin-top:14px">Sirf time aur device type gina jata hai – naam, IP ya location nahi.</p>');
   }
   function save_(q, over) {
     var a = { p_id: q.id, p_title: q.title, p_description: q.description, p_blocks: q.blocks, p_style: q.style, p_password: null, p_active: q.is_active };
@@ -427,12 +513,12 @@
     return file;
   }
   async function editor(id) {
-    ST = { id: null, slug: null, title: "", description: "", blocks: [], style: { fg: "#111111", bg: "#ffffff", shape: "square" }, password: "", lockOn: false, hasPw: false, active: true, pub: false };
+    ST = { id: null, slug: null, title: "", description: "", blocks: [], style: { fg: "#111111", bg: "#ffffff", shape: "square" }, password: "", lockOn: false, hasPw: false, active: true, pub: false, exp: "", max: "" };
     if (id) {
       $app.innerHTML = '<div class="loading"><div class="spin"></div></div>';
       var r = await sb.from("qr_codes").select(COLS).eq("id", id).single();
       if (r.error) { toast("QR nahi mila"); location.hash = "#/"; return; }
-      var q = r.data; ST.id = q.id; ST.slug = q.slug; ST.title = q.title; ST.description = q.description; ST.blocks = q.blocks || []; ST.style = q.style || ST.style; ST.hasPw = q.has_password; ST.lockOn = q.has_password; ST.active = q.is_active; ST.pub = !!q.public_index;
+      var q = r.data; ST.id = q.id; ST.slug = q.slug; ST.title = q.title; ST.description = q.description; ST.blocks = q.blocks || []; ST.style = q.style || ST.style; ST.hasPw = q.has_password; ST.lockOn = q.has_password; ST.active = q.is_active; ST.pub = !!q.public_index; ST.max = q.max_scans ? String(q.max_scans) : ""; ST.exp = q.expires_at ? new Date(q.expires_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) : "";
     }
     drawEditor();
   }
@@ -450,20 +536,24 @@
     var y = window.scrollY;
     var h = '<div class="topbar"><button class="icon-btn" data-go="#/" aria-label="Back">' + ic("back") + "</button><h1>" + (ST.id ? "QR edit karo" : "Naya QR") + '</h1><span style="width:44px"></span></div>' +
       '<div class="card pv"><canvas id="pv"></canvas><div class="pi"><small id="pvt"></small><div class="row" id="dlrow" style="display:none"><button class="btn sm" id="dpng">' + ic("download") + ' PNG</button><button class="btn sm line" id="dsvg">SVG</button><button class="btn sm ghost" id="dcp" aria-label="Link copy">' + ic("copy") + "</button></div></div></div>" +
+      (!ST.id && !ST.blocks.length && !ST.title ? '<div class="card"><h3>' + ic("crown", 17) + ' Quick template</h3><div class="chips">' + Object.keys(TPLS).map(function (k) { return '<button type="button" class="chip" data-tpl="' + k + '">' + TPLS[k].n + "</button>"; }).join("") + "</div></div>" : "") +
       '<div class="card"><h3>' + ic("text", 17) + ' Details</h3><label class="inp">' + ic("qr") + '<input id="t" maxlength="120" placeholder="QR ka naam (jaise Mera Card)" value="' + esc(ST.title) + '"></label><label class="inp area"><textarea id="d" maxlength="1000" placeholder="Description – scan karne par upar dikhega (optional)">' + esc(ST.description) + "</textarea></label></div>" +
       '<div class="card"><h3>' + ic("file", 17) + ' Content (scan par ye sab dikhega)</h3><div id="blocks">' + (ST.blocks.length ? ST.blocks.map(blockHtml).join("") : '<p class="hint" style="margin:0 0 12px">Abhi kuch add nahi kiya. Neeche se shuru karo 👇</p>') + '</div><button class="btn line block" id="addb">' + ic("plus") + " Content add karo</button></div>" +
       '<div class="card"><h3>' + ic("qr", 17) + ' QR ka design</h3><div class="presets">' + PRESETS.map(function (p, i) { return '<button type="button" data-p="' + i + '" aria-label="' + p.n + '" class="' + (ST.style.fg === p.fg && ST.style.bg === p.bg ? "on" : "") + '" style="background:linear-gradient(135deg,' + p.fg + " 50%," + p.bg + ' 50%)"></button>'; }).join("") + "</div>" +
       '<div class="colors"><label>QR rang<input type="color" id="fg" value="' + esc(ST.style.fg) + '"></label><label>Background<input type="color" id="bg" value="' + esc(ST.style.bg) + '"></label></div><div class="warn" id="cw" style="display:none">⚠️ QR dark aur background light rakho, warna scan nahi hoga.</div>' +
-      '<div class="seg" style="margin:0">' + ["square", "rounded", "dots"].map(function (s) { return '<button type="button" data-sh="' + s + '" class="' + (ST.style.shape === s ? "on" : "") + '">' + { square: "Square", rounded: "Rounded", dots: "Dots" }[s] + "</button>"; }).join("") + "</div></div>" +
+      '<div class="seg" style="margin:0 0 4px">' + ["square", "rounded", "dots"].map(function (s) { return '<button type="button" data-sh="' + s + '" class="' + (ST.style.shape === s ? "on" : "") + '">' + { square: "Square", rounded: "Rounded", dots: "Dots" }[s] + "</button>"; }).join("") + "</div>" +
+      '<p class="hint" style="margin:14px 0 6px">Center logo</p><div class="seg" style="margin:0">' + [["", "Off"], ["crown", "👑 Crown"], ["letter", "Letter"]].map(function (o) { return '<button type="button" data-lg="' + o[0] + '" class="' + ((ST.style.logo || "") === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>" +
+      '<p class="hint" style="margin:14px 0 6px">Frame text (QR ke neeche)</p><div class="seg" style="margin:0 0 8px">' + [["", "Off"], ["SCAN ME", "SCAN ME"], ["SCAN KARO", "SCAN KARO"]].map(function (o) { return '<button type="button" data-fr="' + o[0] + '" class="' + ((ST.style.frame || "") === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + '</div><label class="inp" style="margin:0">' + ic("text") + '<input id="frt" maxlength="16" placeholder="Ya apna text likho (jaise MENU)" value="' + esc(ST.style.frame || "") + '"></label></div>' +
       '<div class="card"><h3>' + ic("shield", 17) + ' Security</h3><div class="sw"><div class="tx"><b>Password lock</b><small>Scan karne wale ko password dena padega</small></div><input type="checkbox" id="lk"' + (ST.lockOn ? " checked" : "") + '></div>' +
       '<label class="inp" id="pwbox" style="margin:12px 0 0;' + (ST.lockOn ? "" : "display:none") + '">' + ic("key") + '<input id="pw" type="text" autocomplete="off" placeholder="' + (ST.hasPw ? "Naya password (khali = wahi rahega)" : "QR ka password") + '" value="' + esc(ST.password) + '"></label>' +
       '<div class="sw" style="margin-top:8px"><div class="tx"><b>QR active hai</b><small>Band karoge to scan par "not found" aayega</small></div><input type="checkbox" id="act"' + (ST.active ? " checked" : "") + "></div>" +
       '<div class="sw" style="margin-top:8px"><div class="tx"><b>Google par dikhao</b><small>ON karoge to is QR ka title aur text Google search mein aa sakta hai (password lock ke saath nahi chalega)</small></div><input type="checkbox" id="pub"' + (ST.pub && !ST.lockOn ? " checked" : "") + "></div></div>" +
+      '<div class="card"><h3>' + ic("power", 17) + ' Self-destruct / Expiry</h3><p class="hint" style="margin:-4px 0 12px">Optional – limit poori hone par QR apne aap band ho jayega.</p><label class="inp">' + ic("eye") + '<input id="mx" type="number" min="1" max="1000000" inputmode="numeric" placeholder="Max scans (khali = unlimited)" value="' + esc(ST.max) + '"></label><p class="hint" style="margin:0 0 6px">Expiry date (khali = kabhi nahi)</p><label class="inp">' + ic("power") + '<input id="ex" type="date" value="' + esc(ST.exp) + '"></label></div>' +
       '<div class="err" id="ee" style="text-align:center"></div><div class="savebar"><div><button class="btn block" id="save">' + ic("check") + " Save karo</button></div></div>";
     $app.innerHTML = '<div class="screen noNav">' + h + "</div>"; bindGo(); window.scrollTo(0, y); wireEditor(); updatePreview();
   }
   function updatePreview() {
-    ST.style = { fg: ST.style.fg, bg: ST.style.bg, shape: ST.style.shape };
+    ST.style = { fg: ST.style.fg, bg: ST.style.bg, shape: ST.style.shape, logo: ST.style.logo || "", frame: ST.style.frame || "", ch: ((ST.title || "Q").trim().charAt(0) || "Q").toUpperCase() };
     paint($("#pv"), ST.slug ? shareUrl(ST.slug) : location.origin + "/s/preview1", ST.style, 360);
     $("#pv").style.opacity = ST.slug ? 1 : 0.6; $("#pvt").textContent = ST.slug ? shareUrl(ST.slug) : "Save karoge tab asli QR banega"; $("#dlrow").style.display = ST.slug ? "flex" : "none";
     $("#cw").style.display = lum(ST.style.fg) > lum(ST.style.bg) - 0.25 ? "block" : "none";
@@ -473,6 +563,11 @@
     $("#fg").oninput = function (e) { ST.style.fg = e.target.value; $$(".presets button").forEach(function (b) { b.classList.remove("on"); }); updatePreview(); };
     $("#bg").oninput = function (e) { ST.style.bg = e.target.value; $$(".presets button").forEach(function (b) { b.classList.remove("on"); }); updatePreview(); };
     $$("[data-p]").forEach(function (b) { b.onclick = function () { var p = PRESETS[+b.getAttribute("data-p")]; ST.style.fg = p.fg; ST.style.bg = p.bg; drawEditor(); }; });
+    $$("[data-lg]").forEach(function (b) { b.onclick = function () { ST.style.logo = b.getAttribute("data-lg"); drawEditor(); }; });
+    $$("[data-fr]").forEach(function (b) { b.onclick = function () { ST.style.frame = b.getAttribute("data-fr"); drawEditor(); }; });
+    $("#frt").oninput = function (e) { ST.style.frame = e.target.value; updatePreview(); };
+    $("#mx").oninput = function (e) { ST.max = e.target.value; }; $("#ex").onchange = function (e) { ST.exp = e.target.value; };
+    $$("[data-tpl]").forEach(function (b) { b.onclick = function () { var T = TPLS[b.getAttribute("data-tpl")]; ST.title = T.t; ST.description = T.d; ST.blocks = T.b.map(function (x) { return newBlock(x[0], x[1]); }); drawEditor(); toast("Template laga diya – ab details bharo ✍️"); }; });
     $$("[data-sh]").forEach(function (b) { b.onclick = function () { ST.style.shape = b.getAttribute("data-sh"); drawEditor(); }; });
     $("#lk").onchange = function (e) { ST.lockOn = e.target.checked; $("#pwbox").style.display = ST.lockOn ? "" : "none"; if (ST.lockOn && ST.pub) { ST.pub = false; $("#pub").checked = false; toast("Password lock ON hai, isliye Google par dikhana band kiya"); } }; $("#pub").onchange = function (e) { if (e.target.checked && ST.lockOn) { e.target.checked = false; toast("Pehle password lock band karo"); return; } ST.pub = e.target.checked; }; $("#pw").oninput = function (e) { ST.password = e.target.value; }; $("#act").onchange = function (e) { ST.active = e.target.checked; };
     $("#addb").onclick = function () {
@@ -513,11 +608,12 @@
     if (!ST.blocks.length) { err.textContent = "Kam se kam ek content add karo."; return; }
     var pw = null;
     if (!ST.lockOn) pw = ST.hasPw ? "" : null; else if (ST.password) pw = ST.password; else if (!ST.hasPw) { err.textContent = "Password lock ON hai – password likho."; return; }
+    ST.style.ch = ((ST.title || "Q").trim().charAt(0) || "Q").toUpperCase();
     var blocks = ST.blocks.map(function (b) { return { id: b.id, type: b.type, label: b.label || "", value: b.value || "", extra: b.extra || "", url: b.url || "", path: b.path || "" }; });
     $("#save").disabled = true;
-    var r = await sb.rpc("qr_save", { p_id: ST.id, p_title: ST.title.trim(), p_description: ST.description, p_blocks: blocks, p_style: ST.style, p_password: pw, p_active: ST.active, p_public: ST.pub && !ST.lockOn });
+    var r = await sb.rpc("qr_save", { p_id: ST.id, p_title: ST.title.trim(), p_description: ST.description, p_blocks: blocks, p_style: ST.style, p_password: pw, p_active: ST.active, p_public: ST.pub && !ST.lockOn, p_limits: { expires_at: ST.exp ? ST.exp + "T23:59:59+05:30" : null, max_scans: ST.max ? Math.max(1, parseInt(ST.max, 10) || 1) : null } });
     $("#save").disabled = false; if (r.error) { err.textContent = r.error.message; return; }
-    var q = r.data, isNew = !ST.id; ST.id = q.id; ST.slug = q.slug; ST.hasPw = q.has_password; ST.lockOn = q.has_password; ST.pub = !!q.public_index; ST.password = "";
+    var q = r.data, isNew = !ST.id; ST.id = q.id; ST.slug = q.slug; ST.hasPw = q.has_password; ST.lockOn = q.has_password; ST.pub = !!q.public_index; ST.password = ""; ST.max = q.max_scans ? String(q.max_scans) : "";
     if (isNew) history.replaceState(null, "", "#/edit/" + q.id);
     drawEditor(); toast("Save ho gaya ✅ – ab QR download karo");
   }
@@ -526,16 +622,17 @@
   async function viewer(slug) {
     $app.innerHTML = '<div class="loading"><div class="spin"></div></div>'; var pw = null;
     async function load() {
-      var r = await sb.rpc("qr_scan", { p_slug: slug, p_password: pw });
+      var r = await sb.rpc("qr_scan", { p_slug: slug, p_password: pw, p_dev: devType() });
       if (r.error) { $app.innerHTML = '<div class="view"><div class="card">Error: ' + esc(r.error.message) + "</div></div>"; return; }
       var d = r.data;
       if (d.status === "not_found") { $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:80px"><div class="mark" style="margin:0 auto 18px;animation:none">' + LOGO + '</div><h1>QR nahi mila</h1><p>Ye QR band kar diya gaya hai ya galat hai.</p></div><div class="foot"><a href="/">Qrown par apna QR banao →</a></div></div>'; return; }
+      if (d.status === "expired") { $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:80px"><div class="mark" style="margin:0 auto 18px;animation:none">' + LOGO + '</div><h1>QR expire ho gaya</h1><p>' + esc(d.title || "") + ' – iski limit ya date poori ho chuki hai.</p></div><div class="foot"><a href="/">Qrown par apna QR banao →</a></div></div>'; return; }
       if (d.status === "locked" || d.status === "wrong_password") {
         $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:50px"><div class="mark" style="margin:0 auto 18px;animation:none">' + ic("lock", 38).replace("class=\"i\"", 'class="i" style="stroke:#f8e2a0"') + "</div><h1>" + esc(d.title || "Locked QR") + '</h1><p>Ye QR password se locked hai</p></div><form id="lf" class="card"><label class="inp">' + ic("key") + '<input id="lp" type="password" required autofocus placeholder="Password daalo" aria-label="Password"></label><div class="err">' + (d.status === "wrong_password" ? "Galat password" : "") + '</div><button class="btn block">' + ic("lock") + " Unlock karo</button></form></div>";
         $("#lf").onsubmit = function (e) { e.preventDefault(); pw = $("#lp").value; load(); }; return;
       }
       document.title = d.title + " – " + (CFG.APP_NAME || "Qrown");
-      $app.innerHTML = '<div class="view"><div class="vhead rise"><div class="chip">' + ic("qr", 14) + ' QROWN</div><h1>' + esc(d.title) + "</h1>" + (d.description ? "<p>" + linkify(d.description) + "</p>" : "") + "</div>" + (d.blocks || []).map(renderBlock).join("") + '<div class="shr"><button class="btn ghost" id="vshare">' + ic("ext") + ' Share</button><button class="btn ghost" id="vcopy">' + ic("copy") + ' Link copy</button></div><div class="foot">Made with <a href="/">Qrown</a> · apna QR banao</div><div class="links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer">Report this QR</a></div></div>'; bindViewer();
+      $app.innerHTML = '<div class="view"><div class="vhead rise"><div class="chip">' + ic("qr", 14) + ' QROWN</div><h1>' + esc(d.title) + "</h1>" + (d.description ? "<p>" + linkify(d.description) + "</p>" : "") + "</div>" + (d.left != null ? '<div class="vb burn"><span class="vi">⏳</span><span class="vt"><b>Self-destruct QR</b><small>' + (d.left > 0 ? "Ye QR sirf " + d.left + " baar aur khulega" : "Ye aakhri baar hai – iske baad QR band ho jayega") + "</small></span></div>" : "") + (d.blocks || []).map(renderBlock).join("") + '<div class="shr"><button class="btn ghost" id="vshare">' + ic("ext") + ' Share</button><button class="btn ghost" id="vcopy">' + ic("copy") + ' Link copy</button></div><div class="foot">Made with <a href="/">Qrown</a> · apna QR banao</div><div class="links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="https://instagram.com/' + IG + '" target="_blank" rel="noopener noreferrer">Report this QR</a></div></div>'; bindViewer();
       var rb = document.querySelector('meta[name=robots]'); if (rb && !rb.hasAttribute("data-pub")) rb.content = "noindex,nofollow";
     }
     load();
@@ -568,7 +665,7 @@
     if (kind === "privacy") return docPage("Privacy Policy",
       '<h1>Privacy Policy</h1><p class="upd">Last updated: ' + UPDATED + '</p>' +
       '<p>Your privacy matters. This policy explains what ' + BRAND + ' collects and how it is used.</p>' +
-      '<h2>1. What we collect</h2><ul><li><b>Account:</b> the name you enter, an auto-generated username, and your password (stored only as a secure hash – we cannot read it). We do not ask for your email or phone number to sign up.</li><li><b>Content you add:</b> text, links, photos, PDFs/documents, phone numbers, UPI IDs, locations and other details you put in a QR, plus QR settings such as colours and password lock.</li><li><b>Usage counts:</b> how many times each QR was opened and when it was last opened. We do not record who scanned it.</li><li><b>Technical data:</b> our hosting and database providers may keep standard server logs (such as IP address and device/browser type) for security and reliability.</li></ul>' +
+      '<h2>1. What we collect</h2><ul><li><b>Scan statistics:</b> when a QR is opened we record the time and a coarse device type (mobile / desktop / tablet) so the QR owner can see simple analytics. We do not record your name, IP address or location.</li><li><b>Account:</b> the name you enter, an auto-generated username, and your password (stored only as a secure hash – we cannot read it). We do not ask for your email or phone number to sign up.</li><li><b>Content you add:</b> text, links, photos, PDFs/documents, phone numbers, UPI IDs, locations and other details you put in a QR, plus QR settings such as colours and password lock.</li><li><b>Usage counts:</b> how many times each QR was opened and when it was last opened. We do not record who scanned it.</li><li><b>Technical data:</b> our hosting and database providers may keep standard server logs (such as IP address and device/browser type) for security and reliability.</li></ul>' +
       '<h2>2. Who can see your content</h2><p>Content inside a QR is <b>public to anyone who has the QR or its link</b>, unless you enable the password lock. Uploaded photos and files have web addresses that can be opened by anyone who knows the address. Only add what you are comfortable sharing.</p>' +
       '<h2>3. Camera and scanning</h2><p>The scanner uses your camera only while it is open, and scanning happens on your device. Photos you pick to read a QR are processed on your device and are not uploaded. On some browsers a small open-source decoding script may be loaded from a public CDN.</p>' +
       '<h2>4. How we use data</h2><p>Only to run the service: show your QR content, let you log in, count scans, keep the service secure and prevent abuse. We do not sell your data and we do not show ads.</p>' +

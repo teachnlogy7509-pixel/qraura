@@ -1,5 +1,5 @@
 // Qrown service worker: app-shell cache, network-first so updates arrive quickly.
-const VERSION = "qrown-v9";
+const VERSION = "qrown-v10";
 const SHELL = ["/", "/index.html", "/style.css", "/app.js", "/qr-lib.js", "/config.js", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {

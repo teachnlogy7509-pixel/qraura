@@ -150,3 +150,127 @@ create policy qr_files_insert on storage.objects for insert to authenticated
 drop policy if exists qr_files_delete on storage.objects;
 create policy qr_files_delete on storage.objects for delete to authenticated
   using (bucket_id = 'qr-files' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ===== Qrown v2 upgrade (analytics, expiry, contact/wifi blocks) =====
+alter table public.qr_codes add column if not exists expires_at timestamptz;
+alter table public.qr_codes add column if not exists max_scans integer check (max_scans is null or max_scans between 1 and 1000000);
+grant select (expires_at, max_scans) on public.qr_codes to authenticated;
+create table if not exists public.qr_scan_log (
+  id bigint generated always as identity primary key,
+  qr_id uuid not null references public.qr_codes(id) on delete cascade,
+  at timestamptz not null default now(),
+  dev text
+);
+create index if not exists qr_scan_log_idx on public.qr_scan_log(qr_id, at desc);
+alter table public.qr_scan_log enable row level security;
+revoke all on public.qr_scan_log from anon, authenticated;
+drop function if exists public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean);
+drop function if exists public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean,boolean);
+drop function if exists public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean,boolean,jsonb);
+create or replace function public.qr_save(
+  p_id uuid, p_title text, p_description text, p_blocks jsonb,
+  p_style jsonb, p_password text, p_active boolean, p_public boolean default null, p_limits jsonb default null
+) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  uid uuid := auth.uid();
+  rec public.qr_codes;
+  new_slug text;
+begin
+  if uid is null then raise exception 'login required'; end if;
+  if jsonb_typeof(coalesce(p_blocks,'[]'::jsonb)) <> 'array' then raise exception 'blocks must be array'; end if;
+  if jsonb_array_length(coalesce(p_blocks,'[]'::jsonb)) > 60 then raise exception 'too many blocks'; end if;
+  if exists (
+    select 1 from jsonb_array_elements(coalesce(p_blocks,'[]'::jsonb)) b
+    where coalesce(b->>'type','') not in ('text','link','image','file','detail','phone','whatsapp','email','location','upi','contact','wifi')
+  ) then raise exception 'unsupported block type (video is not allowed)'; end if;
+  if length(coalesce(p_blocks,'[]'::jsonb)::text) > 200000 then raise exception 'content too large'; end if;
+
+  if p_id is null then
+    if (select count(*) from public.qr_codes where owner = uid) >= 100 then raise exception 'QR limit reached (100)'; end if;
+    loop
+      new_slug := substr(translate(encode(gen_random_bytes(9),'base64'),'+/=','abc'),1,8);
+      new_slug := lower(new_slug);
+      exit when not exists (select 1 from public.qr_codes where slug = new_slug);
+    end loop;
+    insert into public.qr_codes(owner, slug, title, description, blocks, style, password_hash, is_active, public_index, expires_at, max_scans)
+    values (uid, new_slug, left(coalesce(nullif(p_title,''),'My QR'),120), left(coalesce(p_description,''),1000),
+            coalesce(p_blocks,'[]'::jsonb), coalesce(p_style, '{"fg":"#111111","bg":"#ffffff","shape":"square"}'::jsonb),
+            case when coalesce(p_password,'') = '' then null else crypt(p_password, gen_salt('bf')) end,
+            coalesce(p_active,true), coalesce(p_public,false) and coalesce(p_password,'') = '',
+            nullif(p_limits->>'expires_at','')::timestamptz, nullif(p_limits->>'max_scans','')::integer)
+    returning * into rec;
+  else
+    update public.qr_codes set
+      title = left(coalesce(nullif(p_title,''),'My QR'),120),
+      description = left(coalesce(p_description,''),1000),
+      blocks = coalesce(p_blocks,'[]'::jsonb),
+      style = coalesce(p_style, style),
+      password_hash = case when p_password is null then password_hash
+                           when p_password = '' then null
+                           else crypt(p_password, gen_salt('bf')) end,
+      is_active = coalesce(p_active, is_active),
+      public_index = case when p_password is not null and p_password <> '' then false
+                          when p_password = '' then coalesce(p_public, public_index)
+                          when password_hash is not null then false
+                          else coalesce(p_public, public_index) end,
+      expires_at = case when p_limits is null then expires_at else nullif(p_limits->>'expires_at','')::timestamptz end,
+      max_scans = case when p_limits is null then max_scans else nullif(p_limits->>'max_scans','')::integer end,
+      updated_at = now()
+    where id = p_id and owner = uid
+    returning * into rec;
+    if rec.id is null then raise exception 'not found'; end if;
+  end if;
+  return to_jsonb(rec) - 'password_hash';
+end $$;
+revoke all on function public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean,boolean,jsonb) from public, anon;
+grant execute on function public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean,boolean,jsonb) to authenticated;
+
+
+drop function if exists public.qr_scan(text,text);
+create or replace function public.qr_scan(p_slug text, p_password text default null, p_dev text default null)
+returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare r public.qr_codes; d text;
+begin
+  select * into r from public.qr_codes where slug = lower(p_slug);
+  if r.id is null or not r.is_active then return jsonb_build_object('status','not_found'); end if;
+  if (r.expires_at is not null and r.expires_at < now()) or (r.max_scans is not null and r.scan_count >= r.max_scans) then
+    return jsonb_build_object('status','expired','title',r.title);
+  end if;
+  if r.password_hash is not null then
+    if p_password is null then
+      return jsonb_build_object('status','locked','title',r.title);
+    end if;
+    if crypt(p_password, r.password_hash) <> r.password_hash then
+      perform pg_sleep(0.7);
+      return jsonb_build_object('status','wrong_password','title',r.title);
+    end if;
+  end if;
+  update public.qr_codes set scan_count = scan_count + 1, last_scanned_at = now() where id = r.id;
+  d := case when p_dev in ('mobile','tablet','desktop') then p_dev else 'other' end;
+  insert into public.qr_scan_log(qr_id, dev) values (r.id, d);
+  return jsonb_build_object('status','ok','title',r.title,'description',r.description,'blocks',r.blocks,
+    'left', case when r.max_scans is null then null else greatest(r.max_scans - r.scan_count - 1, 0) end);
+end $$;
+grant execute on function public.qr_scan(text,text,text) to anon, authenticated;
+
+create or replace function public.qr_stats(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare o uuid; sc int; res jsonb; today date := (now() at time zone 'Asia/Kolkata')::date;
+begin
+  select owner, scan_count into o, sc from public.qr_codes where id = p_id;
+  if o is null or o is distinct from auth.uid() then raise exception 'not found'; end if;
+  select jsonb_build_object(
+    'total', sc,
+    'today', (select count(*) from public.qr_scan_log where qr_id = p_id and (at at time zone 'Asia/Kolkata')::date = today),
+    'days', (select coalesce(jsonb_agg(jsonb_build_object('d', to_char(g.d,'YYYY-MM-DD'), 'n', coalesce(c.n,0)) order by g.d), '[]'::jsonb)
+             from (select generate_series(today-13, today, interval '1 day')::date as d) g
+             left join (select (at at time zone 'Asia/Kolkata')::date as dd, count(*) as n from public.qr_scan_log where qr_id = p_id group by 1) c on c.dd = g.d),
+    'dev', (select coalesce(jsonb_object_agg(coalesce(dev,'other'), n), '{}'::jsonb) from (select dev, count(*) n from public.qr_scan_log where qr_id = p_id group by dev) t),
+    'last', (select max(at) from public.qr_scan_log where qr_id = p_id)
+  ) into res;
+  return res;
+end $$;
+revoke all on function public.qr_stats(uuid) from public, anon;
+grant execute on function public.qr_stats(uuid) to authenticated;
