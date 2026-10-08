@@ -32,10 +32,11 @@ drop policy if exists qr_owner_delete on public.qr_codes;
 create policy qr_owner_delete on public.qr_codes for delete to authenticated using (owner = auth.uid());
 
 -- Create / update a QR (owner only). p_password: null = keep, '' = remove, text = set.
+drop function if exists public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean);
 create or replace function public.qr_save(
   p_id uuid, p_title text, p_description text, p_blocks jsonb,
   p_style jsonb, p_password text, p_active boolean
-) returns public.qr_codes
+) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
 declare
   uid uuid := auth.uid();
@@ -79,7 +80,7 @@ begin
     returning * into rec;
     if rec.id is null then raise exception 'not found'; end if;
   end if;
-  return rec;
+  return to_jsonb(rec) - 'password_hash';
 end $$;
 revoke all on function public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean) from public, anon;
 grant execute on function public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean) to authenticated;

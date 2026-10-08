@@ -161,18 +161,19 @@
   }
   function authView() {
     $app.innerHTML = '<div class="wrap">' + nav() +
-      '<div class="hero"><h1>Apna <span class="grad">QR</span> banao.<br>Sab kuch usme chhupao.</h1>' +
-      "<p>Text, photo, PDF, link, WhatsApp, UPI – jo marzi add karo. Koi bhi scan kare to sab kuch mil jayega. Unlimited QR, free download.</p></div>" +
-      '<div class="card auth" style="margin-bottom:16px"><h3 style="margin:0 0 12px">🆕 Naya account banao</h3><form id="sf">' +
-      '<label class="field"><span>Aapka naam</span><input id="sn" required maxlength="40" placeholder="e.g. Neetu" autocomplete="name"></label>' +
+      '<div class="hero" style="padding:14px 0 6px"><h1 style="font-size:clamp(26px,5vw,40px)">Apna <span class="grad">QR</span> banao.<br>Sab kuch usme chhupao.</h1></div>' +
+      '<div class="card auth"><div class="row" style="margin-bottom:14px"><button class="btn grow" id="tnew" type="button">🆕 New user</button><button class="btn ghost grow" id="told" type="button">👤 Old user</button></div>' +
+      '<form id="sf"><label class="field"><span>Aapka naam (username apne aap ban jayega)</span><input id="sn" required maxlength="40" placeholder="e.g. Neetu" autocomplete="name"></label>' +
       '<label class="field"><span>Password (kam se kam 6 akshar)</span><input type="password" id="sp" required minlength="6" autocomplete="new-password"></label>' +
-      '<div class="small" style="margin-bottom:10px">Naam daalte hi aapka <b>username apne aap ban jayega</b>.</div>' +
-      '<div class="err" id="se"></div><button class="btn" style="width:100%" id="ssub">Account banao</button></form></div>' +
-      '<div class="card auth"><h3 style="margin:0 0 12px">👤 Purane user? Username se login karo</h3><form id="lf2">' +
-      '<label class="field"><span>Username</span><input id="lu" required autocapitalize="off" autocomplete="username" placeholder="e.g. neetu4821"></label>' +
+      '<div class="err" id="se"></div><button class="btn" style="width:100%" id="ssub">Account banao</button></form>' +
+      '<form id="lf2" style="display:none"><label class="field"><span>Username</span><input id="lu" required autocapitalize="off" autocomplete="username" placeholder="e.g. neetu4821"></label>' +
       '<label class="field"><span>Password</span><input type="password" id="lp2" required autocomplete="current-password"></label>' +
-      '<div class="err" id="le"></div><button class="btn ghost" style="width:100%" id="lsub">Login</button></form></div>' +
-      '<div class="feat"><div>📝 Text, links, UPI, numbers<br><span class="small">Sab ek QR mein</span></div><div>🖼️ Photos &amp; PDF<br><span class="small">PDF 40MB tak (video nahi)</span></div><div>🔒 Password lock<br><span class="small">Sirf jise aap password do</span></div><div>🎨 Colors &amp; shapes<br><span class="small">PNG / SVG download</span></div></div></div>';
+      '<div class="err" id="le"></div><button class="btn" style="width:100%" id="lsub">Login</button></form></div></div>';
+    function tab(isNew) {
+      $("#sf").style.display = isNew ? "" : "none"; $("#lf2").style.display = isNew ? "none" : "";
+      $("#tnew").className = "btn grow" + (isNew ? "" : " ghost"); $("#told").className = "btn grow" + (isNew ? " ghost" : "");
+    }
+    $("#tnew").onclick = function () { tab(true); }; $("#told").onclick = function () { tab(false); };
     bindNav();
     $("#sf").onsubmit = async function (e) {
       e.preventDefault(); var err = $("#se"); err.textContent = ""; $("#ssub").disabled = true;
@@ -209,6 +210,7 @@
     }
   }
 
+  var COLS = "id,owner,slug,title,description,blocks,style,has_password,is_active,scan_count,last_scanned_at,created_at,updated_at";
   var cache = [];
   async function dashboard() {
     $app.innerHTML = '<div class="wrap">' + nav() + '<div class="row" style="justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Mere QR codes</h2><button class="btn" id="new">＋ Naya QR</button></div><div id="list" class="small">Loading…</div></div>';
@@ -221,7 +223,7 @@
       $("#cls").onclick = function () { sessionStorage.removeItem("qr_new_username"); bn.remove(); };
     }
     bindNav(); $("#new").onclick = function () { location.hash = "#/new"; };
-    var r = await sb.from("qr_codes").select("*").order("created_at", { ascending: false });
+    var r = await sb.from("qr_codes").select(COLS).order("created_at", { ascending: false });
     if (r.error) { $("#list").textContent = "Error: " + r.error.message; return; }
     cache = r.data;
     if (!cache.length) { $("#list").innerHTML = '<div class="card" style="text-align:center">Abhi koi QR nahi hai.<br><br><button class="btn" id="new2">Pehla QR banao</button></div>'; $("#new2").onclick = function () { location.hash = "#/new"; }; return; }
@@ -288,7 +290,7 @@
   async function editor(id) {
     ST = { id: null, slug: null, title: "", description: "", blocks: [], style: { fg: "#111111", bg: "#ffffff", shape: "square" }, password: "", clearPw: false, hasPw: false, active: true };
     if (id) {
-      var r = await sb.from("qr_codes").select("*").eq("id", id).single();
+      var r = await sb.from("qr_codes").select(COLS).eq("id", id).single();
       if (r.error) { toast("QR nahi mila"); location.hash = "#/"; return; }
       var q = r.data; ST.id = q.id; ST.slug = q.slug; ST.title = q.title; ST.description = q.description; ST.blocks = q.blocks || []; ST.style = q.style || ST.style; ST.hasPw = q.has_password; ST.active = q.is_active;
     }
