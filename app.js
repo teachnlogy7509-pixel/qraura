@@ -60,8 +60,13 @@
   /* ---------- QR rendering (colors + shapes, PNG + SVG) ---------- */
   function makeModules(text) { var q = new window.QRCodeLib(-1, 2); q.addData(text); q.make(); var n = q.getModuleCount(), m = []; for (var r = 0; r < n; r++) { m[r] = []; for (var c = 0; c < n; c++) m[r][c] = q.isDark(r, c); } return m; }
   function inFinder(r, c, n) { return (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7); }
+  function safeStyle(st) {
+    st = st || {}; var fg = st.fg || "#111111", bg = st.bg || "#ffffff", L1 = lum(fg), L2 = lum(bg);
+    if (L1 >= L2 || (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05) < 4) { fg = "#111111"; if (lum(bg) < 0.35) bg = "#ffffff"; }
+    return { fg: fg, bg: bg, shape: st.shape };
+  }
   function qrCanvas(text, style, px) {
-    style = style || {}; px = px || 1024;
+    style = safeStyle(style); px = px || 1024;
     var m = makeModules(text), n = m.length, margin = 4, total = n + margin * 2, s = px / total;
     var cv = document.createElement("canvas"); cv.width = cv.height = px; var g = cv.getContext("2d");
     g.fillStyle = style.bg || "#ffffff"; g.fillRect(0, 0, px, px); g.fillStyle = style.fg || "#111111";
@@ -75,7 +80,7 @@
     return cv;
   }
   function qrSvg(text, style) {
-    style = style || {}; var m = makeModules(text), n = m.length, margin = 4, total = n + margin * 2, shape = style.shape || "square", d = [];
+    style = safeStyle(style); var m = makeModules(text), n = m.length, margin = 4, total = n + margin * 2, shape = style.shape || "square", d = [];
     var out = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + total + " " + total + '" shape-rendering="' + (shape === "square" ? "crispEdges" : "geometricPrecision") + '"><rect width="100%" height="100%" fill="' + esc(style.bg || "#ffffff") + '"/><g fill="' + esc(style.fg || "#111111") + '">';
     for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) {
       if (!m[r][c]) continue; var x = c + margin, y = r + margin;
@@ -193,24 +198,57 @@
     return jsqrP;
   }
   var bd = null;
-  async function decodeCanvas(cv) {
+  function jsqrOn(J, cv, x, y, w, h) {
+    var g = cv.getContext("2d", { willReadFrequently: true }), id = g.getImageData(x, y, w, h);
+    var c = J(id.data, id.width, id.height, { inversionAttempts: "attemptBoth" }); return c && c.data ? c.data : null;
+  }
+  async function decodeCanvas(cv, deep) {
     if ("BarcodeDetector" in window) { try { bd = bd || new window.BarcodeDetector({ formats: ["qr_code"] }); var r = await Promise.race([bd.detect(cv), new Promise(function (res) { setTimeout(function () { res(null); }, 1500); })]); if (r && r.length && r[0].rawValue) return r[0].rawValue; } catch (e) {} }
-    var J = await getJsQR();
-    if (J) { var g = cv.getContext("2d"), id = g.getImageData(0, 0, cv.width, cv.height); var c = J(id.data, id.width, id.height, { inversionAttempts: "attemptBoth" }); if (c && c.data) return c.data; }
+    var J = await getJsQR(); if (!J) return null;
+    var W = cv.width, H = cv.height, t = jsqrOn(J, cv, 0, 0, W, H); if (t) return t;
+    // centre crop (QR usually in the middle of the frame, bigger = easier to read)
+    var cw = Math.round(W * 0.7), ch = Math.round(H * 0.7); t = jsqrOn(J, cv, Math.round((W - cw) / 2), Math.round((H - ch) / 2), cw, ch); if (t) return t;
+    if (deep) { // overlapping tiles for photos where the QR is small
+      var tw = Math.round(W * 0.6), th = Math.round(H * 0.6), xs = [0, W - tw], ys = [0, H - th];
+      for (var i = 0; i < 2; i++) for (var j = 0; j < 2; j++) { t = jsqrOn(J, cv, xs[i], ys[j], tw, th); if (t) return t; }
+    }
     return null;
+  }
+  async function decodeBitmap(bmp) {
+    var cv = document.createElement("canvas"), sizes = [1600, 1000, 640];
+    for (var i = 0; i < sizes.length; i++) {
+      var sc = Math.min(1, sizes[i] / Math.max(bmp.width, bmp.height)); cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+      var g = cv.getContext("2d", { willReadFrequently: true }); g.fillStyle = "#fff"; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(bmp, 0, 0, cv.width, cv.height);
+      var t = await decodeCanvas(cv, true); if (t) return t;
+      if (sc === 1 && i > 0) break;
+    }
+    return null;
+  }
+  function isOurHost(h) { return h === location.hostname || /^(www\.)?qrown\.in$/.test(h) || /^(qrown|qraura)\.[a-z0-9-]+\.workers\.dev$/.test(h); }
+  function camError(x) {
+    var n = x && x.name;
+    if (n === "NotAllowedError" || n === "SecurityError") return "Camera ki permission band hai. Browser/site settings mein Camera → Allow karo, ya neeche Gallery se QR upload karo.";
+    if (n === "NotFoundError" || n === "OverconstrainedError") return "Is device mein camera nahi mila. Gallery se QR upload karo.";
+    if (n === "NotReadableError" || n === "AbortError") return "Camera kisi aur app mein chal raha hai. Wo app band karke 'Dobara try' dabao.";
+    return "Camera start nahi hua. 'Dobara try' dabao ya Gallery se QR upload karo.";
+  }
+  async function getCam() {
+    var tries = [{ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }, { video: { facingMode: "environment" }, audio: false }, { video: true, audio: false }], err;
+    for (var i = 0; i < tries.length; i++) { try { return await navigator.mediaDevices.getUserMedia(tries[i]); } catch (x) { err = x; if (x && (x.name === "NotAllowedError" || x.name === "SecurityError")) break; } }
+    throw err;
   }
   function openScanner() {
     if ($(".scan")) return; closeSheet();
     var ov = document.createElement("div"); ov.className = "scan";
     ov.innerHTML = '<video id="sv" playsinline muted autoplay></video><div class="top"><button class="icon-btn" id="sx" aria-label="Band karo">' + ic("x") + '</button><b>QR Scan</b><span style="width:44px"></span></div><div class="frame"><i></i><i></i><i></i><i></i></div>' +
-      '<div class="bot"><p id="sst">Camera chalu ho raha hai…</p><label class="btn ghost" style="cursor:pointer">' + ic("image") + ' Gallery se QR upload<input id="sfile" type="file" accept="image/*" hidden></label></div><div class="res" id="sres"></div>';
+      '<div class="bot"><p id="sst">Camera chalu ho raha hai…</p><div class="row" id="stools" style="justify-content:center;margin-bottom:10px;display:none"><button class="btn sm ghost" id="storch" type="button" style="display:none">🔦 Torch</button><button class="btn sm ghost" id="szoom" type="button" style="display:none">🔍 Zoom 1x</button></div><div class="row" style="justify-content:center;gap:10px"><button class="btn ghost" id="sretry" type="button" style="display:none">Dobara try</button><label class="btn ghost" style="cursor:pointer">' + ic("image") + ' Gallery se QR upload<input id="sfile" type="file" accept="image/*" hidden></label></div></div><div class="res" id="sres"></div>';
     document.body.appendChild(ov);
     var stream = null, alive = true, vid = $("#sv", ov), st = $("#sst", ov), cv = document.createElement("canvas");
     function stop() { alive = false; if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
     function close() { stop(); ov.remove(); }
     function done(text) {
       stop(); $(".frame", ov).style.display = "none"; $(".bot", ov).style.display = "none";
-      try { var u = new URL(text); if (u.origin === location.origin && /^\/s\/[A-Za-z0-9]+\/?$/.test(u.pathname)) { ov.remove(); location.href = u.pathname; return; } } catch (e) {}
+      try { var u = new URL(text); if (isOurHost(u.hostname) && /^\/s\/[A-Za-z0-9]+\/?$/.test(u.pathname)) { ov.remove(); location.href = location.origin + u.pathname; return; } } catch (e) {}
       var link = /^https?:\/\//i.test(text) ? safeUrl(text) : "";
       $("#sres", ov).innerHTML = '<div class="sheet"><div class="grab"></div><h2>QR mil gaya ✅</h2><div class="vb" style="margin-top:14px"><span class="vi">' + ic(link ? "link" : "text") + '</span><span class="vt"><small>QR mein likha hai</small><div class="tx">' + esc(text) + '</div></span></div><div class="row">' +
         (link ? '<a class="btn grow" target="_blank" rel="noopener noreferrer" href="' + esc(link) + '">' + ic("ext") + " Open</a>" : "") + '<button class="btn ghost grow" data-copy="' + esc(text) + '">' + ic("copy") + ' Copy</button></div><div class="row" style="margin-top:10px"><button class="btn line block" id="sagain">' + ic("scan") + " Dobara scan karo</button></div>" +
@@ -218,28 +256,33 @@
       $("#sagain", ov).onclick = function () { ov.remove(); openScanner(); };
     }
     $("#sx", ov).onclick = close;
+    $("#sretry", ov).onclick = function () { ov.remove(); openScanner(); };
     $("#sfile", ov).onchange = async function (e) {
       var f = e.target.files[0]; if (!f) return; st.textContent = "Image padh raha hoon…";
       try {
-        var bmp = await createImageBitmap(f), sc = Math.min(1, 1400 / Math.max(bmp.width, bmp.height));
-        cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc); cv.getContext("2d", { willReadFrequently: true }).drawImage(bmp, 0, 0, cv.width, cv.height);
-        var t = await decodeCanvas(cv); if (t) done(t); else st.textContent = "Is image mein QR nahi mila. Saaf aur poora QR wali photo chuno.";
-      } catch (x) { st.textContent = "Image khul nahi paayi."; }
+        var bmp; try { bmp = await createImageBitmap(f, { imageOrientation: "from-image" }); } catch (e1) { bmp = await createImageBitmap(f); }
+        var t = await decodeBitmap(bmp); if (t) done(t); else st.textContent = "Is image mein QR nahi mila. QR poora, saaf aur seedha dikhna chahiye (screenshot sabse achha).";
+      } catch (x) { st.textContent = "Image khul nahi paayi. Dusri photo/screenshot try karo."; }
       e.target.value = "";
     };
     (async function () {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { st.textContent = "Camera is browser mein nahi chal raha. Gallery se QR upload karo."; return; }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { st.textContent = "Camera is browser mein nahi chal raha (Chrome/Safari mein kholo). Gallery se QR upload karo."; return; }
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        stream = await getCam();
         if (!alive) { stop(); return; }
         vid.srcObject = stream; await vid.play(); st.textContent = "QR ko frame ke andar laao"; if (!("BarcodeDetector" in window)) getJsQR();
-      } catch (x) { st.textContent = "Camera ki permission nahi mili. Gallery se QR upload kar sakte ho."; return; }
-      var ctx = cv.getContext("2d", { willReadFrequently: true }), busy = false;
+        var tr = stream.getVideoTracks()[0], caps = (tr && tr.getCapabilities && tr.getCapabilities()) || {};
+        try { if (caps.focusMode && caps.focusMode.indexOf("continuous") >= 0) tr.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch (e) {}
+        var tools = $("#stools", ov);
+        if (caps.torch) { tools.style.display = "flex"; var tb = $("#storch", ov), on = false; tb.style.display = ""; tb.onclick = function () { on = !on; tr.applyConstraints({ advanced: [{ torch: on }] }).catch(function () {}); tb.textContent = on ? "🔦 Torch ON" : "🔦 Torch"; }; }
+        if (caps.zoom && caps.zoom.max > 1.5) { tools.style.display = "flex"; var zb = $("#szoom", ov), zs = [1, Math.min(2, caps.zoom.max), Math.min(3, caps.zoom.max)], zi = 0; zb.style.display = ""; zb.onclick = function () { zi = (zi + 1) % zs.length; tr.applyConstraints({ advanced: [{ zoom: zs[zi] }] }).catch(function () {}); zb.textContent = "🔍 Zoom " + zs[zi].toFixed(zs[zi] % 1 ? 1 : 0) + "x"; }; }
+      } catch (x) { st.textContent = camError(x); $("#sretry", ov).style.display = ""; return; }
+      var ctx = cv.getContext("2d", { willReadFrequently: true }), busy = false, tick = 0;
       var timer = setInterval(async function () {
-        if (!alive) return clearInterval(timer); if (busy || !vid.videoWidth) return; busy = true;
-        try { var sc = Math.min(1, 720 / Math.max(vid.videoWidth, vid.videoHeight)); cv.width = Math.round(vid.videoWidth * sc); cv.height = Math.round(vid.videoHeight * sc); ctx.drawImage(vid, 0, 0, cv.width, cv.height); var t = await decodeCanvas(cv); if (t && alive) { clearInterval(timer); done(t); } } catch (e) {}
+        if (!alive) return clearInterval(timer); if (busy || !vid.videoWidth) return; busy = true; tick++;
+        try { var sc = Math.min(1, 1000 / Math.max(vid.videoWidth, vid.videoHeight)); cv.width = Math.round(vid.videoWidth * sc); cv.height = Math.round(vid.videoHeight * sc); ctx.drawImage(vid, 0, 0, cv.width, cv.height); var t = await decodeCanvas(cv, tick % 4 === 0); if (t && alive) { clearInterval(timer); done(t); } } catch (e) {}
         busy = false;
-      }, 200);
+      }, 150);
     })();
   }
 
