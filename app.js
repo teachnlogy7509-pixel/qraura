@@ -144,45 +144,82 @@
 
   function nav() {
     return '<div class="nav"><div class="logo" data-go="#/">' + esc(CFG.APP_NAME || "QRaura") + '</div><div class="row">' +
-      (canInstall() ? '<button class="btn sm" id="install">📲 App install</button>' : "") + (session ? '<span class="small">' + esc((session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || session.user.email || "") + '</span><button class="btn ghost sm" id="logout">Logout</button>' : "") + "</div></div>";
+      (canInstall() ? '<button class="btn sm" id="install">📲 App install</button>' : "") + (session ? '<span class="small">' + esc(userLabel()) + '</span><button class="btn ghost sm" id="pname" title="Naam badlo">✏️</button><button class="btn ghost sm" id="ppass" title="Password badlo">🔑</button><button class="btn ghost sm" id="logout">Logout</button>' : "") + "</div></div>";
   }
   function bindNav() {
     var ib = $("#install"); if (ib) ib.onclick = doInstall;
+    var pn = $("#pname"); if (pn) pn.onclick = function () { editProfile("name"); };
+    var pp = $("#ppass"); if (pp) pp.onclick = function () { editProfile("pass"); };
     var l = $("#logout"); if (l) l.onclick = function () { sb.auth.signOut(); };
     document.querySelectorAll("[data-go]").forEach(function (e) { e.onclick = function () { location.hash = e.getAttribute("data-go"); }; });
   }
 
+  function userLabel() {
+    var u = session && session.user, md = (u && u.user_metadata) || {};
+    var un = md.username || (u && u.email ? u.email.split("@")[0] : "");
+    return (md.name ? md.name + " " : "") + (un ? "(@" + un + ")" : "");
+  }
   function authView() {
     $app.innerHTML = '<div class="wrap">' + nav() +
       '<div class="hero"><h1>Apna <span class="grad">QR</span> banao.<br>Sab kuch usme chhupao.</h1>' +
-      "<p>Text, photo, file, link, WhatsApp, UPI – jo marzi add karo. Koi bhi scan kare to sab kuch mil jayega. Unlimited QR, free download.</p></div>" +
-      '<div class="card auth"><div class="row" style="margin-bottom:12px"><button class="btn grow" id="tabin">Login</button><button class="btn ghost grow" id="tabup">Sign up</button></div>' +
-      '<button class="btn ghost" style="width:100%;margin-bottom:12px" id="gbtn" type="button"><svg width="18" height="18" viewBox="0 0 48 48" style="vertical-align:-3px;margin-right:8px"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>Google se Continue karo</button><div class="small" style="text-align:center;margin-bottom:12px">— ya email se —</div>' +
-      '<form id="af"><label class="field"><span>Email</span><input type="email" id="em" required autocomplete="email"></label>' +
-      '<label class="field"><span>Password (min 6)</span><input type="password" id="pw" required minlength="6" autocomplete="current-password"></label>' +
-      '<div class="err" id="ae"></div><button class="btn" style="width:100%" id="asub">Login</button></form></div>' +
+      "<p>Text, photo, PDF, link, WhatsApp, UPI – jo marzi add karo. Koi bhi scan kare to sab kuch mil jayega. Unlimited QR, free download.</p></div>" +
+      '<div class="card auth" style="margin-bottom:16px"><h3 style="margin:0 0 12px">🆕 Naya account banao</h3><form id="sf">' +
+      '<label class="field"><span>Aapka naam</span><input id="sn" required maxlength="40" placeholder="e.g. Neetu" autocomplete="name"></label>' +
+      '<label class="field"><span>Password (kam se kam 6 akshar)</span><input type="password" id="sp" required minlength="6" autocomplete="new-password"></label>' +
+      '<div class="small" style="margin-bottom:10px">Naam daalte hi aapka <b>username apne aap ban jayega</b>.</div>' +
+      '<div class="err" id="se"></div><button class="btn" style="width:100%" id="ssub">Account banao</button></form></div>' +
+      '<div class="card auth"><h3 style="margin:0 0 12px">👤 Purane user? Username se login karo</h3><form id="lf2">' +
+      '<label class="field"><span>Username</span><input id="lu" required autocapitalize="off" autocomplete="username" placeholder="e.g. neetu4821"></label>' +
+      '<label class="field"><span>Password</span><input type="password" id="lp2" required autocomplete="current-password"></label>' +
+      '<div class="err" id="le"></div><button class="btn ghost" style="width:100%" id="lsub">Login</button></form></div>' +
       '<div class="feat"><div>📝 Text, links, UPI, numbers<br><span class="small">Sab ek QR mein</span></div><div>🖼️ Photos &amp; PDF<br><span class="small">PDF 40MB tak (video nahi)</span></div><div>🔒 Password lock<br><span class="small">Sirf jise aap password do</span></div><div>🎨 Colors &amp; shapes<br><span class="small">PNG / SVG download</span></div></div></div>';
     bindNav();
-    $("#gbtn").onclick = async function () {
-      var r = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/" } });
-      if (r.error) { $("#ae").textContent = r.error.message.indexOf("provider") >= 0 ? "Google login abhi enable nahi hai (Supabase → Authentication → Providers → Google)." : r.error.message; }
+    $("#sf").onsubmit = async function (e) {
+      e.preventDefault(); var err = $("#se"); err.textContent = ""; $("#ssub").disabled = true;
+      var name = $("#sn").value.trim(), pass = $("#sp").value, username = "";
+      try {
+        var res = await fetch(CFG.SUPABASE_URL + "/functions/v1/signup", { method: "POST", headers: { "Content-Type": "application/json", apikey: CFG.SUPABASE_ANON_KEY }, body: JSON.stringify({ name: name, password: pass }) });
+        var d = await res.json();
+        if (!res.ok || !d.username) throw new Error(d.error || "Account nahi ban paaya");
+        username = d.username;
+      } catch (x) { err.textContent = x.message; $("#ssub").disabled = false; return; }
+      sessionStorage.setItem("qr_new_username", username);
+      var li = await sb.auth.signInWithPassword({ email: username + "@qraura.app", password: pass });
+      $("#ssub").disabled = false;
+      if (li.error) err.textContent = "Account ban gaya! Username: " + username + " – ab login karo. (" + li.error.message + ")";
     };
-    var mode = "in";
-    function setMode(m) { mode = m; $("#tabin").className = "btn grow" + (m === "in" ? "" : " ghost"); $("#tabup").className = "btn grow" + (m === "up" ? "" : " ghost"); $("#asub").textContent = m === "in" ? "Login" : "Create account"; }
-    $("#tabin").onclick = function () { setMode("in"); }; $("#tabup").onclick = function () { setMode("up"); };
-    $("#af").onsubmit = async function (e) {
-      e.preventDefault(); var err = $("#ae"); err.textContent = ""; $("#asub").disabled = true;
-      var email = $("#em").value.trim(), pass = $("#pw").value;
-      var res = mode === "in" ? await sb.auth.signInWithPassword({ email: email, password: pass }) : await sb.auth.signUp({ email: email, password: pass });
-      $("#asub").disabled = false;
-      if (res.error) { err.textContent = res.error.message; return; }
-      if (mode === "up" && !res.data.session) err.textContent = "Account ban gaya! Email check karke confirm karo, phir login karo.";
+    $("#lf2").onsubmit = async function (e) {
+      e.preventDefault(); var err = $("#le"); err.textContent = ""; $("#lsub").disabled = true;
+      var un = $("#lu").value.trim().toLowerCase().replace(/^@/, "").replace(/@qraura\.app$/, "");
+      var li = await sb.auth.signInWithPassword({ email: un + "@qraura.app", password: $("#lp2").value });
+      $("#lsub").disabled = false;
+      if (li.error) err.textContent = /invalid/i.test(li.error.message) ? "Username ya password galat hai" : li.error.message;
     };
+  }
+  async function editProfile(kind) {
+    if (kind === "name") {
+      var md = session.user.user_metadata || {}, n = prompt("Naya naam (username nahi badlega):", md.name || ""); if (n === null || !n.trim()) return;
+      var r = await sb.auth.updateUser({ data: { name: n.trim().slice(0, 40) } });
+      if (r.error) return toast(r.error.message);
+      session = (await sb.auth.getSession()).data.session; toast("Naam badal gaya ✅"); route();
+    } else {
+      var p = prompt("Naya password (kam se kam 6 akshar):"); if (p === null) return;
+      if (p.length < 6) return toast("Password bahut chhota hai");
+      var r2 = await sb.auth.updateUser({ password: p }); toast(r2.error ? r2.error.message : "Password badal gaya ✅");
+    }
   }
 
   var cache = [];
   async function dashboard() {
     $app.innerHTML = '<div class="wrap">' + nav() + '<div class="row" style="justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Mere QR codes</h2><button class="btn" id="new">＋ Naya QR</button></div><div id="list" class="small">Loading…</div></div>';
+    var nu = sessionStorage.getItem("qr_new_username");
+    if (nu) {
+      var bn = document.createElement("div"); bn.className = "card"; bn.style.cssText = "margin-bottom:14px;border-color:#27d980";
+      bn.innerHTML = '<b>🎉 Account ban gaya!</b><div style="font-size:24px;font-weight:800;margin:6px 0">@' + esc(nu) + '</div><div class="small">Ye aapka <b>username</b> hai. Dobara login ke liye isko yaad rakho ya screenshot le lo. Password bhoolne par recover nahi hoga.</div><div class="row" style="margin-top:10px"><button class="btn sm" id="cpu">Copy username</button><button class="btn sm ghost" id="cls">Samajh gaya</button></div>';
+      $app.querySelector(".wrap").insertBefore(bn, $app.querySelector(".wrap").children[1]);
+      $("#cpu").onclick = function () { navigator.clipboard && navigator.clipboard.writeText(nu); toast("Copy ho gaya"); };
+      $("#cls").onclick = function () { sessionStorage.removeItem("qr_new_username"); bn.remove(); };
+    }
     bindNav(); $("#new").onclick = function () { location.hash = "#/new"; };
     var r = await sb.from("qr_codes").select("*").order("created_at", { ascending: false });
     if (r.error) { $("#list").textContent = "Error: " + r.error.message; return; }

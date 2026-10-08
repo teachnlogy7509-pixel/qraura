@@ -6,7 +6,7 @@ Stack: static site (Cloudflare Pages) + Supabase (auth, Postgres, storage). No b
 
 ## Setup
 1. Create a **new Supabase project**. Open SQL Editor and run `schema.sql`. Then Dashboard -> Storage -> Settings: set the global file size limit to at least 40 MB.
-2. Supabase -> Authentication -> URL Configuration: set Site URL to your deployed domain. (Optional: disable "Confirm email" for faster testing.)
+2. Deploy the `signup` Edge Function (see `supabase/functions/signup/index.ts`, verify_jwt = off). Accounts are username-based: user enters a name, the function creates a unique username (e.g. neetu4821) and a hidden login email `<username>@qraura.app`. No email provider or Google setup needed.
 3. Put your project URL and anon/publishable key in `config.js`.
 4. Deploy: Cloudflare Pages -> connect this GitHub repo -> framework: None, build command: empty, output directory: `/`.
    `_redirects` makes `/s/<code>` open the scan page.
