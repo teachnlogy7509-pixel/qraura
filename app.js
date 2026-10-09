@@ -692,7 +692,7 @@
   async function profile() {
     shell("profile",
       '<div class="pbig"><div class="avatar">' + esc(userName().charAt(0).toUpperCase()) + "</div><b>" + esc(userName()) + '</b><button class="unchip" id="cpun">@' + esc(userHandle()) + " " + ic("copy", 15) + '</button><div style="margin-top:12px"><span class="vip">' + ic("crown", 13) + " VIP MEMBER</span></div></div>" +
-      '<div class="stats" id="pst"><div class="stat"><b>–</b><small>QR codes</small></div><div class="stat"><b>–</b><small>Scans</small></div><div class="stat"><b>–</b><small>Locked</small></div></div><div class="acc"><button type="button" class="acch" data-acc>' + ic("user") + '<b>Account</b>' + ic("chev") + '</button><div class="accb"><button class="lrow" id="pn">' + ic("edit") + ' Naam badlo<span class="sub">' + ic("chev") + '</span></button><button class="lrow" id="pp">' + ic("key") + ' Password badlo<span class="sub">' + ic("chev") + '</span></button><button class="lrow" id="ps">' + ic("scan") + ' QR scan / upload<span class="sub">' + ic("chev") + "</span></button>" +
+      '<div class="stats" id="pst"><div class="stat"><b>–</b><small>QR codes</small></div><div class="stat"><b>–</b><small>Scans</small></div><div class="stat"><b>–</b><small>Locked</small></div></div><div id="usg"></div><div class="acc"><button type="button" class="acch" data-acc>' + ic("user") + '<b>Account</b>' + ic("chev") + '</button><div class="accb"><button class="lrow" id="pn">' + ic("edit") + ' Naam badlo<span class="sub">' + ic("chev") + '</span></button><button class="lrow" id="pp">' + ic("key") + ' Password badlo<span class="sub">' + ic("chev") + '</span></button><button class="lrow" id="ps">' + ic("scan") + ' QR scan / upload<span class="sub">' + ic("chev") + "</span></button>" +
       (canInstall() || !isStandalone ? '<button class="lrow" id="pi">' + ic("phoneapp") + ' App install karo<span class="sub">' + ic("chev") + "</span></button>" : "") + "</div></div>" +
       '<div class="acc"><button type="button" class="acch" data-acc>' + ic("gear") + '<b>Settings</b>' + ic("chev") + '</button><div class="accb accp"><p class="hint" style="margin:0 0 8px">Theme</p><div class="seg" id="thseg" style="margin-bottom:14px"><button type="button" data-th="dark" class="' + (THEME === "dark" ? "on" : "") + '">🌙 Dark</button><button type="button" data-th="light" class="' + (THEME === "light" ? "on" : "") + '">☀️ Light</button></div>' +
       '<p class="hint" style="margin:0 0 8px">Language / भाषा</p><div class="seg" id="lgseg" style="margin-bottom:14px">' + [["hg", "Hinglish"], ["en", "English"], ["hi", "हिन्दी"]].map(function (x) { return '<button type="button" data-lg3="' + x[0] + '" class="' + (LANG === x[0] ? "on" : "") + '">' + x[1] + "</button>"; }).join("") + '</div>' +
@@ -714,8 +714,32 @@
       lsSet("qn_notif", "1"); toast("Alerts ON 🔔");
     };
     $("#psh").onclick = async function () { var d = { title: BRAND, text: BRAND + " – apna QR banao, sab kuch ek scan mein 👑", url: location.origin }; if (navigator.share) { try { await navigator.share(d); } catch (e) {} } else copyText(location.origin, "App ka link copy ho gaya ✅"); }; $("#plo").onclick = function () { sb.auth.signOut(); };
+    usageCard();
     var r = await sb.from("qr_codes").select("scan_count,has_password");
     if (!r.error) $("#pst").innerHTML = '<div class="stat"><b>' + r.data.length + "</b><small>QR codes</small></div><div class=\"stat\"><b>" + r.data.reduce(function (a, q) { return a + q.scan_count; }, 0) + "</b><small>Scans</small></div><div class=\"stat\"><b>" + r.data.filter(function (q) { return q.has_password; }).length + "</b><small>Locked</small></div>";
+  }
+  /* ---------- fair-use usage ---------- */
+  function fmtMB(b) { var m = Number(b) / 1048576; return m < 10 ? m.toFixed(1) : String(Math.round(m)); }
+  async function usageCard() {
+    var el = $("#usg"); if (!el) return; var r = await sb.rpc("qr_usage"); if (r.error || !r.data) return; var u = r.data, sp = Math.min(100, Math.round(u.scans / u.scan_limit * 100)), mp = Math.min(100, Math.round(Number(u.bytes) / (u.mb_limit * 1048576) * 100));
+    var rs = new Date(u.resets + "T00:00:00+05:30").toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }), full = u.scans >= u.scan_limit, sfull = Number(u.bytes) > u.mb_limit * 1048576;
+    el.innerHTML = '<div class="card usgc"><b class="usgt">Free limits (aapka usage)</b>' +
+      '<div class="usgr"><span>Is mahine ke scans</span><b>' + u.scans + " / " + u.scan_limit + '</b></div><div class="upline usgb' + (sp >= 100 ? " bad" : sp >= 80 ? " warn" : "") + '"><div class="upfill" style="width:' + sp + '%"></div></div>' +
+      '<div class="usgr"><span>Storage (photo/PDF)</span><b>' + fmtMB(u.bytes) + " / " + u.mb_limit + ' MB</b></div><div class="upline usgb' + (mp >= 100 ? " bad" : mp >= 80 ? " warn" : "") + '"><div class="upfill" style="width:' + mp + '%"></div></div>' +
+      (full ? '<p class="usgw">Scan limit poori ho gayi – aapke QR ' + rs + " tak scan karne par error dikhayenge.</p>" : "") + (sfull ? '<p class="usgw">Storage limit paar ho gaya – aapke QR band hain. Purani files delete karo ya neeche button dabao.</p>' : "") +
+      '<p class="hint" style="margin:8px 0 0">Scan limit ' + rs + ' ko reset hogi.</p><button type="button" class="btn ghost" id="ucl" style="margin-top:10px;width:100%">Unused files saaf karo</button></div>';
+    $("#ucl").onclick = cleanFiles;
+  }
+  async function cleanFiles() {
+    var b = $("#ucl"); b.disabled = true; b.textContent = "Check ho raha hai…";
+    try {
+      var uidf = session.user.id, ls = await sb.storage.from("qr-files").list(uidf, { limit: 1000 }); if (ls.error) throw ls.error;
+      var qs = await sb.from("qr_codes").select("blocks,view"), used = {}; if (qs.error) throw qs.error;
+      (qs.data || []).forEach(function (x) { (x.blocks || []).forEach(function (k) { if (k.path) used[k.path] = 1; }); if (x.view && x.view.cover_path) used[x.view.cover_path] = 1; });
+      var del = [], sz = 0; (ls.data || []).forEach(function (f) { var pth = uidf + "/" + f.name; if (f.id && !used[pth] && f.created_at && Date.now() - new Date(f.created_at).getTime() > 3600000) { del.push(pth); sz += (f.metadata && f.metadata.size) || 0; } });
+      if (!del.length) toast("Koi unused file nahi mili ✅"); else { var rm = await sb.storage.from("qr-files").remove(del); if (rm.error) throw rm.error; toast(del.length + " file saaf (" + fmtMB(sz) + " MB) ✅"); }
+    } catch (e) { toast("Saaf nahi ho paya: " + (e.message || e)); }
+    usageCard();
   }
   async function editProfile(kind) {
     if (kind === "name") {
@@ -733,8 +757,9 @@
   var ST = null;
   function uploadFile(path, file, onProgress) {
     return new Promise(function (resolve, reject) {
-      sb.auth.getSession().then(function (r) {
+      sb.auth.getSession().then(async function (r) {
         var tok = r.data.session && r.data.session.access_token; if (!tok) return reject(new Error("login expire ho gaya, dobara login karo"));
+        try { var ug = await sb.rpc("qr_usage"); if (ug.data && ug.data.mb_limit != null && Number(ug.data.bytes) + file.size > ug.data.mb_limit * 1048576) return reject(new Error("storage limit (" + ug.data.mb_limit + "MB) poori ho jayegi – Profile mein 'Unused files saaf karo' dabao ya purani files delete karo")); } catch (e) {}
         var x = new XMLHttpRequest();
         x.open("POST", CFG.SUPABASE_URL + "/storage/v1/object/qr-files/" + path.split("/").map(encodeURIComponent).join("/"));
         x.setRequestHeader("Authorization", "Bearer " + tok); x.setRequestHeader("apikey", CFG.SUPABASE_ANON_KEY); x.setRequestHeader("x-upsert", "false"); x.setRequestHeader("cache-control", "max-age=31536000");
@@ -910,6 +935,8 @@
       var d = r.data, vw = d.view || {}; setVt(vw.theme);
       if (d.status === "not_found") { $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:80px">' + MK + '<h1>QR nahi mila</h1><p>Ye QR band kar diya gaya hai ya galat hai.</p></div>' + NF + "</div>"; return; }
       if (d.status === "expired") { $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:80px">' + MK + '<h1>QR expire ho gaya</h1><p>' + esc(d.title || "") + ' – iski limit ya date poori ho chuki hai.</p></div>' + NF + "</div>"; return; }
+      if (d.status === "scan_limit") { $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:80px">' + MK + '<h1>QR abhi kaam nahi kar raha</h1><p>' + esc(d.title || "") + ' – is QR ke owner ki is mahine ki free scan limit poori ho gayi hai. Agle mahine dobara try karo ya owner se sampark karo.</p></div>' + NF + "</div>"; return; }
+      if (d.status === "storage_full") { $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:80px">' + MK + '<h1>QR error</h1><p>' + esc(d.title || "") + ' – is QR ke owner ka storage limit (80MB) paar ho gaya hai, isliye ye QR abhi band hai. Owner ko batao ki purani files delete kare.</p></div>' + NF + "</div>"; return; }
       if (d.status === "notyet") { $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:80px">' + MK + '<h1>QR abhi shuru nahi hua</h1><p>' + esc(d.title || "") + " – ye " + esc(fmtIST(d.starts_at)) + ' ko khulega</p></div>' + NF + "</div>"; return; }
       if (d.status === "locked" || d.status === "wrong_password") {
         $app.innerHTML = '<div class="view rise"><div class="vhead" style="margin-top:50px"><div class="mark" style="margin:0 auto 18px;animation:none">' + ic("lock", 38).replace("class=\"i\"", 'class="i" style="stroke:#f8e2a0"') + "</div><h1>" + esc(d.title || "Locked QR") + '</h1><p>Ye QR password se locked hai</p></div><form id="lf" class="card"><label class="inp">' + ic("key") + '<input id="lp" type="password" required autofocus placeholder="Password daalo" aria-label="Password"></label><div class="err">' + (d.status === "wrong_password" ? "Galat password" : "") + '</div><button class="btn block">' + ic("lock") + " Unlock karo</button></form></div>";
@@ -941,6 +968,7 @@
     ["QR nahi mila", "QR not found", "QR नहीं मिला"], ["Ye QR band kar diya gaya hai ya galat hai.", "This QR has been turned off or is invalid.", "यह QR बंद कर दिया गया है या ग़लत है।"],
     ["Qrown par apna QR banao →", "Create your own QR on Qrown →", "Qrown पर अपना QR बनाएँ →"], ["QR expire ho gaya", "QR expired", "QR की अवधि समाप्त हो गई"],
     ["QR abhi shuru nahi hua", "This QR hasn't started yet", "यह QR अभी शुरू नहीं हुआ"],
+    ["QR abhi kaam nahi kar raha", "This QR isn't working right now", "यह QR अभी काम नहीं कर रहा"], ["QR error", "QR error", "QR त्रुटि"], ["Free limits (aapka usage)", "Free limits (your usage)", "फ़्री लिमिट (आपका उपयोग)"], ["Is mahine ke scans", "Scans this month", "इस महीने के स्कैन"], ["Storage (photo/PDF)", "Storage (photo/PDF)", "स्टोरेज (फ़ोटो/PDF)"], ["Unused files saaf karo", "Clean up unused files", "बेकार फ़ाइलें साफ़ करें"],
     ["Ye QR password se locked hai", "This QR is locked with a password", "यह QR पासवर्ड से लॉक है"], ["Password daalo", "Enter password", "पासवर्ड डालें"], ["Unlock karo", "Unlock", "अनलॉक करें"], ["Galat password", "Wrong password", "ग़लत पासवर्ड"],
     ["Aapka naam", "Your name", "आपका नाम"], ["Phone number", "Phone number", "फ़ोन नंबर"], ["Message (optional)", "Message (optional)", "संदेश (ज़रूरी नहीं)"], ["Bhejo", "Send", "भेजें"],
     ["Mujhse sampark karo", "Contact me", "मुझसे संपर्क करें"], ["Shukriya! Aapki details bhej di gayi hain ✅", "Thank you! Your details have been sent ✅", "धन्यवाद! आपकी जानकारी भेज दी गई है ✅"],
@@ -1047,7 +1075,7 @@
       '<h2>3. Your content</h2><p>You own the content you add. You are fully responsible for it and for having the right to share it. You give ' + BRAND + ' permission to store and display it so the service can work.</p>' +
       '<h2>4. What you must not do</h2><ul><li>Upload or share anything illegal, abusive, hateful, sexually explicit, or that exploits or harms children.</li><li>Run scams, phishing, fake payment requests, malware or misleading links.</li><li>Infringe copyright, trademarks or anyone\'s privacy; impersonate another person or business.</li><li>Upload video or audio files – they are not allowed.</li><li>Abuse, overload, reverse-engineer or attack the service.</li></ul>' +
       '<div class="note">Do not put highly sensitive details (Aadhaar, card numbers, OTPs, passwords) in a QR unless you use the password lock and fully understand the risk. Content in a QR you share is visible to whoever can open it.</div>' +
-      '<h2>5. Limits</h2><p>Photos up to 15 MB, PDFs/documents up to 40 MB, up to 100 QR codes per account. We may change limits or features at any time.</p>' +
+      '<h2>5. Limits</h2><p>Photos up to 15 MB, PDFs/documents up to 40 MB, up to 100 QR codes per account. Free fair-use: 40 scans per month (across all your QR codes) and 80 MB total file storage per account; when exceeded, your QR codes show an error to visitors until the limit resets or files are removed. We may change limits or features at any time.</p>' +
       '<h2>6. Payments</h2><p>' + BRAND + ' only displays UPI IDs/links you add. We do not process, hold or guarantee any payment. Verify details before paying anyone.</p>' +
       '<h2>7. Removal and suspension</h2><p>We may remove content, disable QR codes or suspend accounts that break these terms or the law, with or without notice. To report a QR, contact the admin (see Contact).</p>' +
       '<h2>8. No warranty</h2><p>' + BRAND + ' is provided "as is". We try to keep it available and secure but cannot promise it will always be error-free or uninterrupted, or that content will never be lost.</p>' +
@@ -1071,6 +1099,10 @@
       ["Kya video upload ho sakta hai?", "Nahi. Sirf photos (15MB tak), PDF/documents (40MB tak), text, links, numbers, UPI aadi save hote hain."],
       ["Mera QR scan nahi ho raha?", "QR ka rang dark aur background light rakho, aur print saaf aur bada rakho. Camera ko seedha rakho."],
       ["QR ka naam badal sakte hain? Link badlega kya?", "Haan, naam kabhi bhi badlo. QR ka link aur printed QR wahi rehta hai."],
+      ["Free limits kya hain?", "Har account ke liye free plan mein: mahine mein 40 scans (aapke saare QR milake), total 80MB files (photo/PDF), 100 QR tak. Ek photo 15MB aur PDF 40MB tak."],
+      ["Mahine ki 40 scan limit poori ho jaye to?", "Tab aapke QR scan karne par 'QR abhi kaam nahi kar raha' error dikhega. Limit har mahine ki 1 tareekh (IST) ko reset ho jati hai. Profile mein dekh sakte ho kitne scan bache hain."],
+      ["80MB storage se zyada ho jaye to?", "Naye photo/PDF upload nahi honge aur aapke QR par 'QR error – storage limit' dikhega. Purani files delete karo ya Profile mein 'Unused files saaf karo' dabao, QR phir se chalne lagenge."],
+      ["Ye limits kyun hain?", "App bilkul free hai aur server ka kharcha hota hai, isliye sabke liye fair-use limit rakhi hai. Zyada limit chahiye to admin se sampark karo."],
       ["Kisi galat ya spam QR ki report kaise karun?", "Admin ko Instagram, Telegram ya Email par QR ka link bhejo. Hum check karke hata denge."]];
     return docPage("Contact Admin",
       '<h1>Contact Admin</h1><p class="upd">Help, report ya feedback – seedha admin se baat karo.</p>' +

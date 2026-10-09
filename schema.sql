@@ -520,3 +520,105 @@ begin
 end $$;
 revoke all on function public.qr_notif_clear() from public, anon;
 grant execute on function public.qr_notif_clear() to authenticated;
+-- Qrown v5: fair-use limits (monthly scans + per-user storage)
+create table if not exists public.qr_limits (key text primary key, val int not null);
+insert into public.qr_limits(key, val) values ('monthly_scans', 40), ('storage_mb', 80) on conflict (key) do nothing;
+alter table public.qr_limits enable row level security;
+revoke all on public.qr_limits from anon, authenticated;
+
+create table if not exists public.qr_limit_override (
+  owner uuid primary key references auth.users(id) on delete cascade,
+  monthly_scans int, storage_mb int
+);
+alter table public.qr_limit_override enable row level security;
+revoke all on public.qr_limit_override from anon, authenticated;
+
+create table if not exists public.qr_usage_month (
+  owner uuid not null references auth.users(id) on delete cascade,
+  month date not null,
+  scans int not null default 0,
+  primary key (owner, month)
+);
+alter table public.qr_usage_month enable row level security;
+revoke all on public.qr_usage_month from anon, authenticated;
+
+create or replace function public.qr_lim(p_owner uuid, p_key text) returns int
+language sql stable security definer set search_path = public as $$
+  select coalesce(
+    case p_key when 'monthly_scans' then (select monthly_scans from public.qr_limit_override where owner = p_owner)
+               else (select storage_mb from public.qr_limit_override where owner = p_owner) end,
+    (select val from public.qr_limits where key = p_key), 0)
+$$;
+revoke all on function public.qr_lim(uuid, text) from public, anon, authenticated;
+
+create or replace function public.qr_storage_bytes(p_owner uuid) returns bigint
+language sql stable security definer set search_path = public, storage as $$
+  select coalesce(sum(coalesce((metadata->>'size')::bigint, 0)), 0)::bigint from storage.objects
+  where bucket_id = 'qr-files' and name like p_owner::text || '/%'
+$$;
+revoke all on function public.qr_storage_bytes(uuid) from public, anon, authenticated;
+
+create or replace function public.qr_storage_ok() returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.qr_storage_bytes(auth.uid()) < public.qr_lim(auth.uid(), 'storage_mb')::bigint * 1048576
+$$;
+revoke all on function public.qr_storage_ok() from public, anon;
+grant execute on function public.qr_storage_ok() to authenticated;
+
+create or replace function public.qr_usage() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); m date := date_trunc('month', now() at time zone 'Asia/Kolkata')::date; sc int;
+begin
+  if uid is null then raise exception 'login required'; end if;
+  select scans into sc from public.qr_usage_month where owner = uid and month = m;
+  return jsonb_build_object('scans', coalesce(sc,0), 'scan_limit', public.qr_lim(uid,'monthly_scans'),
+    'bytes', public.qr_storage_bytes(uid), 'mb_limit', public.qr_lim(uid,'storage_mb'), 'resets', (m + interval '1 month')::date);
+end $$;
+revoke all on function public.qr_usage() from public, anon;
+grant execute on function public.qr_usage() to authenticated;
+
+drop policy if exists qr_files_insert on storage.objects;
+create policy qr_files_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'qr-files' and (storage.foldername(name))[1] = auth.uid()::text and public.qr_storage_ok());
+drop policy if exists qr_files_select on storage.objects;
+create policy qr_files_select on storage.objects for select to authenticated
+  using (bucket_id = 'qr-files' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create or replace function public.qr_scan(p_slug text, p_password text default null, p_dev text default null)
+returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare r public.qr_codes; d text; m date := date_trunc('month', now() at time zone 'Asia/Kolkata')::date; sc int;
+begin
+  select * into r from public.qr_codes where slug = lower(p_slug);
+  if r.id is null or not r.is_active then return jsonb_build_object('status','not_found'); end if;
+  if r.starts_at is not null and r.starts_at > now() then
+    return jsonb_build_object('status','notyet','title',r.title,'starts_at',r.starts_at,'view',jsonb_build_object('theme', r.view->>'theme'));
+  end if;
+  if (r.expires_at is not null and r.expires_at < now()) or (r.max_scans is not null and r.scan_count >= r.max_scans) then
+    return jsonb_build_object('status','expired','title',r.title);
+  end if;
+  if public.qr_storage_bytes(r.owner) > public.qr_lim(r.owner,'storage_mb')::bigint * 1048576 then
+    return jsonb_build_object('status','storage_full','title',r.title);
+  end if;
+  select scans into sc from public.qr_usage_month where owner = r.owner and month = m;
+  if coalesce(sc,0) >= public.qr_lim(r.owner,'monthly_scans') then
+    return jsonb_build_object('status','scan_limit','title',r.title);
+  end if;
+  if r.password_hash is not null then
+    if p_password is null then
+      return jsonb_build_object('status','locked','title',r.title);
+    end if;
+    if crypt(p_password, r.password_hash) <> r.password_hash then
+      perform pg_sleep(0.7);
+      return jsonb_build_object('status','wrong_password','title',r.title);
+    end if;
+  end if;
+  update public.qr_codes set scan_count = scan_count + 1, last_scanned_at = now() where id = r.id;
+  insert into public.qr_usage_month(owner, month, scans) values (r.owner, m, 1)
+    on conflict (owner, month) do update set scans = public.qr_usage_month.scans + 1;
+  d := case when p_dev in ('mobile','tablet','desktop') then p_dev else 'other' end;
+  insert into public.qr_scan_log(qr_id, dev) values (r.id, d);
+  return jsonb_build_object('status','ok','title',r.title,'description',r.description,'blocks',r.blocks,'view',r.view,
+    'left', case when r.max_scans is null then null else greatest(r.max_scans - r.scan_count - 1, 0) end);
+end $$;
+grant execute on function public.qr_scan(text,text,text) to anon, authenticated;
