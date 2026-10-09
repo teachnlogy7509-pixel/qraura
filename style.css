@@ -387,3 +387,12 @@ html.light .brand h1,html.light .doc h1,body[data-vt="light"] .doc h1{background
 .accb.accp{padding:14px}
 .accb .lrow:first-child{border-top:0}
 .nrow.seen{opacity:.62}
+.hubrow{min-height:62px}.hubrow .ht{display:block}.hubrow .ht b{display:block;font-size:16px;color:var(--txt)}.hubrow .ht small{color:var(--mut);font-size:13px}
+.joinb{display:inline-flex;align-items:center;gap:5px;font-weight:700;color:var(--ink)!important;background:var(--gold);padding:7px 12px;border-radius:99px;font-size:13px!important}
+.trust{margin:22px 0 8px;padding:18px;border-radius:22px;border:1px solid rgba(var(--accl),.35);background:linear-gradient(135deg,rgba(var(--acc),.12),rgba(var(--ok-rgb,79,214,156),.07))}
+.trust .th{display:flex;align-items:center;gap:12px;margin-bottom:12px}.trust .th>.i{font-size:34px;color:var(--ok)}
+.trust .th b{display:block;font-size:18px}.trust .th small{color:var(--mut);font-size:13px}
+.trust ul{list-style:none;margin:0;padding:0}.trust li{display:flex;gap:10px;align-items:flex-start;padding:6px 0;font-size:14px;color:var(--txt)}.trust li .i{color:var(--ok);margin-top:3px}
+.trust .tf{text-align:center;margin:12px 0 0;color:var(--mut);font-size:13px}
+.trustmini{display:flex;align-items:center;justify-content:center;gap:6px;margin:16px 0 4px;color:var(--ok);font-size:13px;font-weight:600}
+.lrow .joinb .i{color:var(--ink)}
