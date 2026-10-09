@@ -376,3 +376,13 @@ html.light body,body[data-vt="light"]{background-image:radial-gradient(700px 420
 .itr.two{align-items:flex-start}.itr.two .stk{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}.itr.two .rmi{margin-top:3px}
 html.light .vhead .chip,body[data-vt="light"] .vhead .chip{color:#ffe9a8}
 html.light .brand h1,html.light .doc h1,body[data-vt="light"] .doc h1{background:linear-gradient(135deg,#c58a1b,#8a5a00);-webkit-background-clip:text;background-clip:text}
+.acc{background:var(--s1);border:1px solid var(--bd);border-radius:22px;margin:14px 0;overflow:hidden}
+.acch{display:flex;align-items:center;gap:12px;width:100%;min-height:58px;padding:0 16px;background:none;border:0;color:var(--txt);font:700 16px inherit;font-family:inherit;cursor:pointer}
+.acch b{flex:1;text-align:left}
+.acch .i{font-size:20px;color:var(--g2)}
+.acch .i:last-child{color:var(--mut);transition:transform .2s}
+.acc.open .acch .i:last-child{transform:rotate(90deg)}
+.accb{display:none;padding:0 14px 6px;border-top:1px solid var(--bd)}
+.acc.open .accb{display:block}
+.accb.accp{padding:14px}
+.accb .lrow:first-child{border-top:0}
