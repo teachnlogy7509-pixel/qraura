@@ -274,3 +274,190 @@ begin
 end $$;
 revoke all on function public.qr_stats(uuid) from public, anon;
 grant execute on function public.qr_stats(uuid) to authenticated;
+
+-- ===== Qrown v3: folders, scheduling, themes/cover, lead forms, activity =====
+-- Qrown v3: folders, scheduling, viewer look (theme/cover/welcome), lead forms, activity feed
+alter table public.qr_codes add column if not exists folder text check (folder is null or char_length(folder) <= 30);
+alter table public.qr_codes add column if not exists starts_at timestamptz;
+alter table public.qr_codes add column if not exists view jsonb not null default '{}'::jsonb;
+grant select (folder, starts_at, view) on public.qr_codes to authenticated;
+
+create table if not exists public.qr_leads (
+  id bigint generated always as identity primary key,
+  qr_id uuid not null references public.qr_codes(id) on delete cascade,
+  at timestamptz not null default now(),
+  name text, phone text, msg text
+);
+create index if not exists qr_leads_idx on public.qr_leads(qr_id, at desc);
+alter table public.qr_leads enable row level security;
+revoke all on public.qr_leads from anon, authenticated;
+
+drop function if exists public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean,boolean,jsonb);
+create or replace function public.qr_save(
+  p_id uuid, p_title text, p_description text, p_blocks jsonb,
+  p_style jsonb, p_password text, p_active boolean, p_public boolean default null, p_limits jsonb default null,
+  p_folder text default null, p_view jsonb default null
+) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  uid uuid := auth.uid();
+  rec public.qr_codes;
+  new_slug text;
+  fld text := left(btrim(coalesce(p_folder,'')),30);
+begin
+  if uid is null then raise exception 'login required'; end if;
+  if jsonb_typeof(coalesce(p_blocks,'[]'::jsonb)) <> 'array' then raise exception 'blocks must be array'; end if;
+  if jsonb_array_length(coalesce(p_blocks,'[]'::jsonb)) > 60 then raise exception 'too many blocks'; end if;
+  if exists (
+    select 1 from jsonb_array_elements(coalesce(p_blocks,'[]'::jsonb)) b
+    where coalesce(b->>'type','') not in ('text','link','image','file','detail','phone','whatsapp','email','location','upi','contact','wifi','links','social','lead')
+  ) then raise exception 'unsupported block type (video is not allowed)'; end if;
+  if length(coalesce(p_blocks,'[]'::jsonb)::text) > 200000 then raise exception 'content too large'; end if;
+  if p_view is not null and (jsonb_typeof(p_view) <> 'object' or length(p_view::text) > 4000) then raise exception 'invalid look settings'; end if;
+
+  if p_id is null then
+    if (select count(*) from public.qr_codes where owner = uid) >= 100 then raise exception 'QR limit reached (100)'; end if;
+    loop
+      new_slug := substr(translate(encode(gen_random_bytes(9),'base64'),'+/=','abc'),1,8);
+      new_slug := lower(new_slug);
+      exit when not exists (select 1 from public.qr_codes where slug = new_slug);
+    end loop;
+    insert into public.qr_codes(owner, slug, title, description, blocks, style, password_hash, is_active, public_index, expires_at, max_scans, starts_at, folder, view)
+    values (uid, new_slug, left(coalesce(nullif(p_title,''),'My QR'),120), left(coalesce(p_description,''),1000),
+            coalesce(p_blocks,'[]'::jsonb), coalesce(p_style, '{"fg":"#111111","bg":"#ffffff","shape":"square"}'::jsonb),
+            case when coalesce(p_password,'') = '' then null else crypt(p_password, gen_salt('bf')) end,
+            coalesce(p_active,true), coalesce(p_public,false) and coalesce(p_password,'') = '',
+            nullif(p_limits->>'expires_at','')::timestamptz, nullif(p_limits->>'max_scans','')::integer,
+            nullif(p_limits->>'starts_at','')::timestamptz, nullif(fld,''), coalesce(p_view,'{}'::jsonb))
+    returning * into rec;
+  else
+    update public.qr_codes set
+      title = left(coalesce(nullif(p_title,''),'My QR'),120),
+      description = left(coalesce(p_description,''),1000),
+      blocks = coalesce(p_blocks,'[]'::jsonb),
+      style = coalesce(p_style, style),
+      password_hash = case when p_password is null then password_hash
+                           when p_password = '' then null
+                           else crypt(p_password, gen_salt('bf')) end,
+      is_active = coalesce(p_active, is_active),
+      public_index = case when p_password is not null and p_password <> '' then false
+                          when p_password = '' then coalesce(p_public, public_index)
+                          when password_hash is not null then false
+                          else coalesce(p_public, public_index) end,
+      expires_at = case when p_limits is null then expires_at else nullif(p_limits->>'expires_at','')::timestamptz end,
+      max_scans = case when p_limits is null then max_scans else nullif(p_limits->>'max_scans','')::integer end,
+      starts_at = case when p_limits is null then starts_at else nullif(p_limits->>'starts_at','')::timestamptz end,
+      folder = case when p_folder is null then folder else nullif(fld,'') end,
+      view = coalesce(p_view, view),
+      updated_at = now()
+    where id = p_id and owner = uid
+    returning * into rec;
+    if rec.id is null then raise exception 'not found'; end if;
+  end if;
+  return to_jsonb(rec) - 'password_hash';
+end $$;
+revoke all on function public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean,boolean,jsonb,text,jsonb) from public, anon;
+grant execute on function public.qr_save(uuid,text,text,jsonb,jsonb,text,boolean,boolean,jsonb,text,jsonb) to authenticated;
+
+create or replace function public.qr_scan(p_slug text, p_password text default null, p_dev text default null)
+returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare r public.qr_codes; d text;
+begin
+  select * into r from public.qr_codes where slug = lower(p_slug);
+  if r.id is null or not r.is_active then return jsonb_build_object('status','not_found'); end if;
+  if r.starts_at is not null and r.starts_at > now() then
+    return jsonb_build_object('status','notyet','title',r.title,'starts_at',r.starts_at,'view',jsonb_build_object('theme', r.view->>'theme'));
+  end if;
+  if (r.expires_at is not null and r.expires_at < now()) or (r.max_scans is not null and r.scan_count >= r.max_scans) then
+    return jsonb_build_object('status','expired','title',r.title);
+  end if;
+  if r.password_hash is not null then
+    if p_password is null then
+      return jsonb_build_object('status','locked','title',r.title);
+    end if;
+    if crypt(p_password, r.password_hash) <> r.password_hash then
+      perform pg_sleep(0.7);
+      return jsonb_build_object('status','wrong_password','title',r.title);
+    end if;
+  end if;
+  update public.qr_codes set scan_count = scan_count + 1, last_scanned_at = now() where id = r.id;
+  d := case when p_dev in ('mobile','tablet','desktop') then p_dev else 'other' end;
+  insert into public.qr_scan_log(qr_id, dev) values (r.id, d);
+  return jsonb_build_object('status','ok','title',r.title,'description',r.description,'blocks',r.blocks,'view',r.view,
+    'left', case when r.max_scans is null then null else greatest(r.max_scans - r.scan_count - 1, 0) end);
+end $$;
+grant execute on function public.qr_scan(text,text,text) to anon, authenticated;
+
+create or replace function public.qr_lead_submit(p_slug text, p_name text, p_phone text, p_msg text, p_password text default null)
+returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare r public.qr_codes;
+begin
+  select * into r from public.qr_codes where slug = lower(p_slug);
+  if r.id is null or not r.is_active then raise exception 'QR not found'; end if;
+  if (r.expires_at is not null and r.expires_at < now()) or (r.starts_at is not null and r.starts_at > now()) then raise exception 'QR not active'; end if;
+  if not exists (select 1 from jsonb_array_elements(r.blocks) b where b->>'type' = 'lead') then raise exception 'form not available'; end if;
+  if r.password_hash is not null and (p_password is null or crypt(p_password, r.password_hash) <> r.password_hash) then raise exception 'locked'; end if;
+  if coalesce(btrim(p_name),'') = '' and coalesce(btrim(p_phone),'') = '' and coalesce(btrim(p_msg),'') = '' then raise exception 'empty form'; end if;
+  if (select count(*) from public.qr_leads where qr_id = r.id and at > now() - interval '1 minute') >= 20 then raise exception 'too many submissions, try later'; end if;
+  if (select count(*) from public.qr_leads where qr_id = r.id) >= 2000 then raise exception 'form is full'; end if;
+  insert into public.qr_leads(qr_id, name, phone, msg) values (r.id, left(btrim(coalesce(p_name,'')),80), left(btrim(coalesce(p_phone,'')),30), left(btrim(coalesce(p_msg,'')),600));
+  return jsonb_build_object('ok', true);
+end $$;
+grant execute on function public.qr_lead_submit(text,text,text,text,text) to anon, authenticated;
+
+create or replace function public.qr_leads_list(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare o uuid;
+begin
+  select owner into o from public.qr_codes where id = p_id;
+  if o is null or o is distinct from auth.uid() then raise exception 'not found'; end if;
+  return (select coalesce(jsonb_agg(jsonb_build_object('id',id,'at',at,'name',name,'phone',phone,'msg',msg) order by at desc), '[]'::jsonb)
+          from (select * from public.qr_leads where qr_id = p_id order by at desc limit 500) t);
+end $$;
+revoke all on function public.qr_leads_list(uuid) from public, anon;
+grant execute on function public.qr_leads_list(uuid) to authenticated;
+
+create or replace function public.qr_leads_clear(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare o uuid;
+begin
+  select owner into o from public.qr_codes where id = p_id;
+  if o is null or o is distinct from auth.uid() then raise exception 'not found'; end if;
+  delete from public.qr_leads where qr_id = p_id;
+end $$;
+revoke all on function public.qr_leads_clear(uuid) from public, anon;
+grant execute on function public.qr_leads_clear(uuid) to authenticated;
+
+create or replace function public.qr_lead_counts() returns jsonb
+language sql security definer set search_path = public as $$
+  select coalesce(jsonb_object_agg(qr_id, n), '{}'::jsonb) from (
+    select l.qr_id, count(*) n from public.qr_leads l join public.qr_codes c on c.id = l.qr_id where c.owner = auth.uid() group by l.qr_id) t;
+$$;
+revoke all on function public.qr_lead_counts() from public, anon;
+grant execute on function public.qr_lead_counts() to authenticated;
+
+create or replace function public.qr_activity(p_since timestamptz) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); s timestamptz := coalesce(p_since, now() - interval '7 days'); res jsonb;
+begin
+  if uid is null then raise exception 'login required'; end if;
+  if s < now() - interval '30 days' then s := now() - interval '30 days'; end if;
+  select jsonb_build_object(
+    'scans', (select count(*) from public.qr_scan_log l join public.qr_codes c on c.id = l.qr_id where c.owner = uid and l.at > s),
+    'leads', (select count(*) from public.qr_leads l join public.qr_codes c on c.id = l.qr_id where c.owner = uid and l.at > s),
+    'items', (select coalesce(jsonb_agg(x order by (x->>'at') desc), '[]'::jsonb) from (
+        select * from (
+          select jsonb_build_object('k','scan','at',l.at,'t',c.title,'id',c.id,'x',l.dev) x from public.qr_scan_log l join public.qr_codes c on c.id = l.qr_id where c.owner = uid and l.at > s order by l.at desc limit 25
+        ) a
+        union all
+        select * from (
+          select jsonb_build_object('k','lead','at',l.at,'t',c.title,'id',c.id,'x',l.name) x from public.qr_leads l join public.qr_codes c on c.id = l.qr_id where c.owner = uid and l.at > s order by l.at desc limit 25
+        ) b
+      ) u)
+  ) into res;
+  return res;
+end $$;
+revoke all on function public.qr_activity(timestamptz) from public, anon;
+grant execute on function public.qr_activity(timestamptz) to authenticated;

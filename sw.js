@@ -1,5 +1,5 @@
 // Qrown service worker: app-shell cache, network-first so updates arrive quickly.
-const VERSION = "qrown-v10";
+const VERSION = "qrown-v11";
 const SHELL = ["/", "/index.html", "/style.css", "/app.js", "/qr-lib.js", "/config.js", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
@@ -26,4 +26,12 @@ self.addEventListener("fetch", (e) => {
       return res;
     }).catch(() => caches.match(req).then((hit) => hit || (req.mode === "navigate" ? caches.match("/index.html") : Response.error())))
   );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) => {
+    for (const c of cs) { if ("focus" in c) return c.focus(); }
+    return self.clients.openWindow("/");
+  }));
 });
