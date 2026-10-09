@@ -386,3 +386,4 @@ html.light .brand h1,html.light .doc h1,body[data-vt="light"] .doc h1{background
 .acc.open .accb{display:block}
 .accb.accp{padding:14px}
 .accb .lrow:first-child{border-top:0}
+.nrow.seen{opacity:.62}

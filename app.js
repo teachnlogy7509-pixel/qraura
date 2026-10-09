@@ -135,8 +135,8 @@
     }
   }
   async function pollActivity() {
-    if (!session || !sb) return; var s = lsGet("qn_seen"); if (!s) { lsSet("qn_seen", new Date().toISOString()); s = lsGet("qn_seen"); }
-    var r; try { r = await sb.rpc("qr_activity", { p_since: s }); } catch (e) { return; } if (!r || r.error || !r.data) return;
+    if (!session || !sb) return;
+    var r; try { r = await sb.rpc("qr_activity", { p_since: null }); } catch (e) { return; } if (!r || r.error || !r.data) return;
     var n = (r.data.scans || 0) + (r.data.leads || 0); actCount = n; setBadge(n);
     if (actLast >= 0 && n > actLast) notifyNew(n - actLast); actLast = n;
   }
@@ -147,14 +147,15 @@
   }
   async function activitySheet() {
     sheet('<h2>Notifications</h2><div class="loading" style="min-height:120px"><div class="spin"></div></div>');
-    var seen = lsGet("qn_seen") || "", r = await sb.rpc("qr_activity", { p_since: new Date(Date.now() - 7 * 864e5).toISOString() });
+    var r = await sb.rpc("qr_activity", { p_since: null });
     if (r.error) { sheet("<h2>Notifications</h2><p class=\"hint center\">" + esc(r.error.message) + "</p>"); return; }
     var it = (r.data && r.data.items) || [];
     sheet("<h2>Notifications</h2>" + (it.length ? it.map(function (x) {
-      var isNew = !seen || x.at > seen;
-      return '<div class="nrow' + (isNew ? " new" : "") + '"><span class="ni">' + (x.k === "scan" ? "📷" : "📨") + '</span><span><b>' + esc(x.t) + "</b><small>" + (x.k === "scan" ? "Scan hua" : "Naya lead") + (x.x ? " · " + esc(x.x) : "") + " · " + esc(fmtShort(x.at)) + "</small></span></div>";
-    }).join("") + '<button class="btn block" id="nseen" style="margin-top:16px">' + ic("check") + " Sab dekh liya</button>" : '<p class="hint center" style="margin:20px 0">Pichhle 7 din mein koi naya scan ya lead nahi aaya.</p>'),
-    function (sh) { var b = $("#nseen", sh); if (b) b.onclick = function () { lsSet("qn_seen", new Date().toISOString()); actCount = 0; actLast = 0; setBadge(0); closeSheet(); }; });
+      return '<div class="nrow' + (x.s ? " seen" : " new") + '"><span class="ni">' + (x.k === "scan" ? "📷" : "📨") + '</span><span><b>' + esc(x.t) + "</b><small>" + (x.k === "scan" ? "Scan hua" : "Naya lead") + (x.x ? " · " + esc(x.x) : "") + " · " + esc(fmtShort(x.at)) + "</small></span></div>";
+    }).join("") + '<p class="hint center" style="margin:14px 0 0">Dekhne ke 12 ghante baad ye notifications apne aap hat jaati hain.</p><button class="btn ghost block" id="nclr" style="margin-top:12px">' + ic("trash") + " Abhi saaf karo</button>" : '<p class="hint center" style="margin:20px 0">Koi nayi notification nahi hai.</p><p class="hint center">Dekhne ke 12 ghante baad notifications apne aap hat jaati hain.</p>'),
+    function (sh) { var b = $("#nclr", sh); if (b) b.onclick = async function () { await sb.rpc("qr_notif_clear"); actCount = 0; actLast = 0; setBadge(0); toast("Saaf ho gaya"); activitySheet(); }; });
+    if (it.some(function (x) { return !x.s; })) { await sb.rpc("qr_notif_seen"); }
+    actCount = 0; actLast = 0; setBadge(0);
   }
 
   /* ---------- icons ---------- */
@@ -965,7 +966,7 @@
     ["Mere QR codes", "My QR codes", "मेरे QR कोड"], ["Abhi koi QR nahi hai", "No QR yet", "अभी कोई QR नहीं है"], ["Pehla QR banao aur scan karke dekho.", "Create your first QR and scan it.", "पहला QR बनाएँ और स्कैन करके देखें।"],
     ["Pehla QR banao", "Create first QR", "पहला QR बनाएँ"], ["Sab", "All", "सभी"], ["Bina folder", "No folder", "बिना फ़ोल्डर"], ["Google", "Google", "Google"], ["⏳ Expired", "⏳ Expired", "⏳ समाप्त"], ["⏳ Limit", "⏳ Limit", "⏳ सीमा"],
     ["⏰ Schedule", "⏰ Scheduled", "⏰ शेड्यूल"], ["Active", "Active", "चालू"], ["Off", "Off", "बंद"], ["Account ban gaya!", "Account created!", "अकाउंट बन गया!"], ["Copy username", "Copy username", "यूज़रनेम कॉपी करें"], ["Samajh gaya", "Got it", "समझ गया"],
-    ["Notifications", "Notifications", "नोटिफ़िकेशन"], ["Sab dekh liya", "Mark all as seen", "सब देख लिया"], ["Scan hua", "Scanned", "स्कैन हुआ"], ["Naya lead", "New lead", "नई लीड"],
+    ["Notifications", "Notifications", "नोटिफ़िकेशन"], ["Sab dekh liya", "Mark all as seen", "सब देख लिया"], ["Dekhne ke 12 ghante baad ye notifications apne aap hat jaati hain.", "Notifications disappear automatically 12 hours after you view them.", "देखने के 12 घंटे बाद ये नोटिफ़िकेशन अपने आप हट जाती हैं।"], ["Dekhne ke 12 ghante baad notifications apne aap hat jaati hain.", "Notifications disappear automatically 12 hours after you view them.", "देखने के 12 घंटे बाद नोटिफ़िकेशन अपने आप हट जाती हैं।"], ["Koi nayi notification nahi hai.", "No new notifications.", "कोई नई नोटिफ़िकेशन नहीं है।"], ["Abhi saaf karo", "Clear now", "अभी साफ़ करें"], ["Saaf ho gaya", "Cleared", "साफ़ हो गया"], ["Scan hua", "Scanned", "स्कैन हुआ"], ["Naya lead", "New lead", "नई लीड"],
     ["Pichhle 7 din mein koi naya scan ya lead nahi aaya.", "No new scans or leads in the last 7 days.", "पिछले 7 दिन में कोई नया स्कैन या लीड नहीं आई।"],
     // QR sheet
     ["PNG", "PNG", "PNG"], ["SVG", "SVG", "SVG"], ["Poster", "Poster", "पोस्टर"], ["Analytics", "Analytics", "एनालिटिक्स"], ["Page kholo", "Open page", "पेज खोलें"], ["scan jaisa dikhega", "looks like a scan", "स्कैन जैसा दिखेगा"],

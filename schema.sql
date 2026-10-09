@@ -461,3 +461,62 @@ begin
 end $$;
 revoke all on function public.qr_activity(timestamptz) from public, anon;
 grant execute on function public.qr_activity(timestamptz) to authenticated;
+
+-- ===== Qrown v4 =====
+-- Qrown v4: notifications auto-hide 12h after they were seen
+alter table public.qr_scan_log add column if not exists notif_seen_at timestamptz;
+alter table public.qr_leads add column if not exists notif_seen_at timestamptz;
+update public.qr_scan_log set notif_seen_at = now() - interval '13 hours' where notif_seen_at is null;
+update public.qr_leads set notif_seen_at = now() - interval '13 hours' where notif_seen_at is null;
+create index if not exists qr_scan_log_unseen_idx on public.qr_scan_log(qr_id) where notif_seen_at is null;
+create index if not exists qr_leads_unseen_idx on public.qr_leads(qr_id) where notif_seen_at is null;
+
+create or replace function public.qr_activity(p_since timestamptz) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); s timestamptz := coalesce(p_since, now() - interval '30 days'); res jsonb;
+begin
+  if uid is null then raise exception 'login required'; end if;
+  if s < now() - interval '30 days' then s := now() - interval '30 days'; end if;
+  select jsonb_build_object(
+    'scans', (select count(*) from public.qr_scan_log l join public.qr_codes c on c.id = l.qr_id where c.owner = uid and l.at > s and l.notif_seen_at is null),
+    'leads', (select count(*) from public.qr_leads l join public.qr_codes c on c.id = l.qr_id where c.owner = uid and l.at > s and l.notif_seen_at is null),
+    'items', (select coalesce(jsonb_agg(x order by (x->>'at') desc), '[]'::jsonb) from (
+        select * from (
+          select jsonb_build_object('k','scan','at',l.at,'t',c.title,'id',c.id,'x',l.dev,'s',l.notif_seen_at is not null) x
+          from public.qr_scan_log l join public.qr_codes c on c.id = l.qr_id
+          where c.owner = uid and l.at > now() - interval '30 days' and (l.notif_seen_at is null or l.notif_seen_at > now() - interval '12 hours') order by l.at desc limit 30
+        ) a
+        union all
+        select * from (
+          select jsonb_build_object('k','lead','at',l.at,'t',c.title,'id',c.id,'x',l.name,'s',l.notif_seen_at is not null) x
+          from public.qr_leads l join public.qr_codes c on c.id = l.qr_id
+          where c.owner = uid and l.at > now() - interval '30 days' and (l.notif_seen_at is null or l.notif_seen_at > now() - interval '12 hours') order by l.at desc limit 30
+        ) b
+      ) u)
+  ) into res;
+  return res;
+end $$;
+revoke all on function public.qr_activity(timestamptz) from public, anon;
+grant execute on function public.qr_activity(timestamptz) to authenticated;
+
+create or replace function public.qr_notif_seen() returns void
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null then raise exception 'login required'; end if;
+  update public.qr_scan_log l set notif_seen_at = now() from public.qr_codes c where c.id = l.qr_id and c.owner = uid and l.notif_seen_at is null;
+  update public.qr_leads l set notif_seen_at = now() from public.qr_codes c where c.id = l.qr_id and c.owner = uid and l.notif_seen_at is null;
+end $$;
+revoke all on function public.qr_notif_seen() from public, anon;
+grant execute on function public.qr_notif_seen() to authenticated;
+
+create or replace function public.qr_notif_clear() returns void
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null then raise exception 'login required'; end if;
+  update public.qr_scan_log l set notif_seen_at = now() - interval '13 hours' from public.qr_codes c where c.id = l.qr_id and c.owner = uid and (l.notif_seen_at is null or l.notif_seen_at > now() - interval '12 hours');
+  update public.qr_leads l set notif_seen_at = now() - interval '13 hours' from public.qr_codes c where c.id = l.qr_id and c.owner = uid and (l.notif_seen_at is null or l.notif_seen_at > now() - interval '12 hours');
+end $$;
+revoke all on function public.qr_notif_clear() from public, anon;
+grant execute on function public.qr_notif_clear() to authenticated;
